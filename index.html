@@ -128,9 +128,8 @@
     /* This element controls the visible game area */
     .screen-viewport {
       width: 100%;
-      /* This keeps the visible area in a 9:16 style ratio */
       aspect-ratio: 9 / 16;
-      max-height: calc(100vh - 260px); /* keep cabinet on screen on short displays */
+      max-height: calc(100vh - 260px);
       display: flex;
       justify-content: center;
       align-items: center;
@@ -144,12 +143,10 @@
       width: 100%;
       height: 100%;
       image-rendering: pixelated;
-      border: 3px solid #000000; /* rectangular frame */
+      border: 3px solid #000000;
       border-radius: 0;
       background: #000000;
     }
-
-    /* Buttons + footer */
 
     .buttons-row {
       display: flex;
@@ -278,10 +275,11 @@
     // -----------------------------
     const GRID_COLS = 19;
     const GRID_ROWS = 34;
-    const CELL_SIZE = 24; // internal logical pixel size
+    const CELL_SIZE = 24;
     const GAME_WIDTH = GRID_COLS * CELL_SIZE;
     const GAME_HEIGHT = GRID_ROWS * CELL_SIZE;
-    const TICK_MS = 160; // controls speed, locked to music tempo
+    const TICK_MS = 160; // movement speed
+    const START_DELAY_MS = 200; // tiny delay for sync
 
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
@@ -290,7 +288,6 @@
     canvas.width = GAME_WIDTH;
     canvas.height = GAME_HEIGHT;
 
-    // Make strokes crisp
     ctx.lineJoin = "miter";
     ctx.lineCap = "square";
 
@@ -335,6 +332,10 @@
 
     const deathSound = new Audio("game/death.wav");
 
+    bgImage.onload = () => {
+      draw();
+    };
+
     // -----------------------------
     // Game state
     // -----------------------------
@@ -358,15 +359,17 @@
       const startX = Math.floor(GRID_COLS / 2);
       const startY = GRID_ROWS - 6;
 
+      // Vertical stack, head at the top, moving up
       snake = [
-        { x: startX - 2, y: startY },
-        { x: startX - 1, y: startY },
         { x: startX, y: startY },
-        { x: startX + 1, y: startY },
-        { x: startX + 2, y: startY }
+        { x: startX, y: startY - 1 },
+        { x: startX, y: startY - 2 },
+        { x: startX, y: startY - 3 },
+        { x: startX, y: startY - 4 }
       ];
-      direction = DIRECTION.LEFT;
-      pendingDirection = DIRECTION.LEFT;
+
+      direction = DIRECTION.UP;
+      pendingDirection = DIRECTION.UP;
       score = 0;
       placeFood();
     }
@@ -501,7 +504,7 @@
       music.currentTime = 0;
       music.play().catch(() => {});
 
-      lastTickTime = performance.now();
+      lastTickTime = performance.now() + START_DELAY_MS;
       if (!tickId) {
         tickId = requestAnimationFrame(tick);
       }
@@ -517,6 +520,8 @@
       }
       music.currentTime = 0;
       music.play().catch(() => {});
+
+      lastTickTime = performance.now() + START_DELAY_MS;
     }
 
     function tick(timestamp) {
@@ -591,7 +596,6 @@
     }
 
     function drawBackground() {
-      if (!bgImage.complete) return;
       ctx.drawImage(bgImage, 0, 0, GAME_WIDTH, GAME_HEIGHT);
     }
 
@@ -599,13 +603,11 @@
       ctx.lineWidth = 2;
       ctx.strokeStyle = "#000000";
 
-      // Body segments except head
       for (let i = 0; i < snake.length - 1; i++) {
         const seg = snake[i];
         drawCell(seg.x, seg.y, false);
       }
 
-      // Head
       const head = snake[snake.length - 1];
       drawCell(head.x, head.y, true);
     }
@@ -618,14 +620,14 @@
       ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
 
       ctx.strokeStyle = "#000000";
-      ctx.strokeRect(px + 0.5, py + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
+      ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
 
       if (isHead) {
         drawHeadEyes(px, py);
       }
     }
 
-    // Constant top-down eyes, same placement regardless of direction
+    // Constant top-down eyes
     function drawHeadEyes(px, py) {
       const eyeSize = Math.floor(CELL_SIZE / 5);
       const offsetX = Math.floor(CELL_SIZE / 4);
@@ -652,18 +654,18 @@
       ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
       ctx.strokeStyle = "#000000";
       ctx.lineWidth = 2;
-      ctx.strokeRect(px + 0.5, py + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
+      ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
     }
 
     function drawScore() {
       ctx.fillStyle = "#000000";
       ctx.font = "18px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
       ctx.textBaseline = "top";
-      ctx.fillText("Score: " + score, 8, 6);
+      ctx.textAlign = "left";
+      ctx.fillText("Score: " + score, 8, 14);
     }
 
     function drawStartOverlay() {
-      // Logo overlay
       if (logoImage.complete) {
         const logoWidth = GAME_WIDTH * 0.7;
         const ratio = logoImage.height / logoImage.width;
@@ -684,7 +686,7 @@
         GAME_HEIGHT * 0.65
       );
       ctx.fillText(
-        "On mobile: swipe to move, tap to pause",
+        "On mobile: swipe to move",
         GAME_WIDTH / 2,
         GAME_HEIGHT * 0.72
       );
@@ -726,7 +728,6 @@
     resetGame();
     draw();
 
-    // Focus canvas on click so keyboard works without clicking outside
     canvas.addEventListener("click", () => {
       canvas.focus();
     });
