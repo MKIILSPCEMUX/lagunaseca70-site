@@ -14,12 +14,10 @@
     :root {
       --bg-gold: #e4b93b;
       --cabinet-purple: #210c3b;
-      --cabinet-purple-inner: #18072c;
       --button-blue: #13b0e5;
       --button-pink: #ff3a7f;
       --text-light: #ffffff;
       --snake-body: #7cf35b;
-      --snake-head: #c6ff82;
       --snake-border: #000000;
       --food-color: #ff6b6b;
     }
@@ -125,7 +123,6 @@
       align-items: center;
     }
 
-    /* This element controls the visible game area */
     .screen-viewport {
       width: 100%;
       aspect-ratio: 9 / 16;
@@ -137,7 +134,6 @@
       overflow: hidden;
     }
 
-    /* Canvas: keep internal pixels 19x34 but scale to viewport */
     #gameCanvas {
       display: block;
       width: 100%;
@@ -282,20 +278,18 @@
     const CELL_SIZE = 24;
     const GAME_WIDTH = GRID_COLS * CELL_SIZE;
     const GAME_HEIGHT = GRID_ROWS * CELL_SIZE;
-    const TICK_MS = 160; // movement speed
-    const START_DELAY_MS = 200; // tiny delay for sync
+    const TICK_MS = 145; // a bit snappier
+    const START_DELAY_MS = 200; // small delay for sync
 
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    // Internal resolution for crisp grid
     canvas.width = GAME_WIDTH;
     canvas.height = GAME_HEIGHT;
 
     ctx.lineJoin = "miter";
     ctx.lineCap = "square";
 
-    // Manage scaling so the canvas always fits the viewport container
     function resizeCanvasDisplay() {
       const viewport = document.querySelector(".screen-viewport");
       if (!viewport) return;
@@ -361,15 +355,15 @@
 
     function resetGame() {
       const startX = Math.floor(GRID_COLS / 2);
-      const startY = GRID_ROWS - 6;
+      const START_ROW = 13; // between logo and instructions
 
-      // Horizontal row, head on the right, moving left (old position)
+      // Horizontal row, head on the right, moving left
       snake = [
-        { x: startX - 2, y: startY },
-        { x: startX - 1, y: startY },
-        { x: startX, y: startY },
-        { x: startX + 1, y: startY },
-        { x: startX + 2, y: startY }
+        { x: startX - 2, y: START_ROW },
+        { x: startX - 1, y: START_ROW },
+        { x: startX,     y: START_ROW },
+        { x: startX + 1, y: START_ROW },
+        { x: startX + 2, y: START_ROW }
       ];
 
       direction = DIRECTION.LEFT;
@@ -565,15 +559,18 @@
         return;
       }
 
-      // Self collision
-      if (snake.some((seg) => seg.x === newHead.x && seg.y === newHead.y)) {
+      const willGrow = newHead.x === food.x && newHead.y === food.y;
+
+      // Self collision: if not growing, ignore current tail because it moves away
+      const bodyToCheck = willGrow ? snake : snake.slice(1);
+      if (bodyToCheck.some((seg) => seg.x === newHead.x && seg.y === newHead.y)) {
         handleDeath();
         return;
       }
 
       snake.push(newHead);
 
-      if (newHead.x === food.x && newHead.y === food.y) {
+      if (willGrow) {
         score += 1;
         placeFood();
       } else {
@@ -620,7 +617,8 @@
       const px = gridX * CELL_SIZE;
       const py = gridY * CELL_SIZE;
 
-      ctx.fillStyle = isHead ? "#c6ff82" : "#7cf35b";
+      // Head and body same colour
+      ctx.fillStyle = "#7cf35b";
       ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
 
       ctx.strokeStyle = "#000000";
@@ -706,11 +704,9 @@
         let drawHeight;
 
         if (imgRatio > canvasRatio) {
-          // Image wider than canvas: fit width
           drawWidth = GAME_WIDTH;
           drawHeight = GAME_WIDTH / imgRatio;
         } else {
-          // Image taller than canvas: fit height
           drawHeight = GAME_HEIGHT;
           drawWidth = GAME_HEIGHT * imgRatio;
         }
