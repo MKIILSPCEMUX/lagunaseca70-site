@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Laguna Sneca – Mini Game</title>
+  <title>Laguna Sneca | Mini Game</title>
 
   <!-- Mobile + scaling -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -265,6 +265,10 @@
         Game, music and design by Laguna Seca. Snake locked to 105&nbsp;BPM.<br />
         Contact:
         <a href="mailto:contact@lagunaseca70.com">contact@lagunaseca70.com</a>
+        &nbsp;|&nbsp;
+        <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">
+          Buy me a coffee
+        </a>
       </div>
     </div>
   </div>
@@ -359,17 +363,17 @@
       const startX = Math.floor(GRID_COLS / 2);
       const startY = GRID_ROWS - 6;
 
-      // Vertical stack, head at the top, moving up
+      // Horizontal row, head on the right, moving left (old position)
       snake = [
+        { x: startX - 2, y: startY },
+        { x: startX - 1, y: startY },
         { x: startX, y: startY },
-        { x: startX, y: startY - 1 },
-        { x: startX, y: startY - 2 },
-        { x: startX, y: startY - 3 },
-        { x: startX, y: startY - 4 }
+        { x: startX + 1, y: startY },
+        { x: startX + 2, y: startY }
       ];
 
-      direction = DIRECTION.UP;
-      pendingDirection = DIRECTION.UP;
+      direction = DIRECTION.LEFT;
+      pendingDirection = DIRECTION.LEFT;
       score = 0;
       placeFood();
     }
@@ -693,8 +697,28 @@
     }
 
     function drawDeathOverlay() {
-      if (deathImage.complete) {
-        ctx.drawImage(deathImage, 0, 0, GAME_WIDTH, GAME_HEIGHT);
+      // Draw YOU DIED image with preserved aspect ratio, centred
+      if (deathImage.complete && deathImage.width && deathImage.height) {
+        const imgRatio = deathImage.width / deathImage.height;
+        const canvasRatio = GAME_WIDTH / GAME_HEIGHT;
+
+        let drawWidth;
+        let drawHeight;
+
+        if (imgRatio > canvasRatio) {
+          // Image wider than canvas: fit width
+          drawWidth = GAME_WIDTH;
+          drawHeight = GAME_WIDTH / imgRatio;
+        } else {
+          // Image taller than canvas: fit height
+          drawHeight = GAME_HEIGHT;
+          drawWidth = GAME_HEIGHT * imgRatio;
+        }
+
+        const drawX = (GAME_WIDTH - drawWidth) / 2;
+        const drawY = (GAME_HEIGHT - drawHeight) / 2;
+
+        ctx.drawImage(deathImage, drawX, drawY, drawWidth, drawHeight);
       }
 
       ctx.fillStyle = "#000000";
