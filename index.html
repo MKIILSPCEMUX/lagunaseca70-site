@@ -7,30 +7,22 @@
   <!-- Mobile + scaling -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Basic description -->
-  <meta
-    name="description"
-    content="Play Laguna Sneca, a retro browser mini game by Laguna Seca. Snake locked to a 105 BPM loop."
-  />
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="game/laguna-logo.png" />
 
-  <!-- Open Graph / Social -->
-  <meta property="og:title" content="Laguna Sneca - A Mini Game by Laguna Seca" />
-  <meta property="og:description" content="Retro snake, sacred painting, 105 BPM. Play Laguna Sneca in your browser." />
+  <!-- Social preview -->
+  <meta property="og:title" content="Laguna Sneca – A Mini Game by Laguna Seca" />
+  <meta property="og:description" content="Play Laguna Sneca, a mini browser snake game locked to 105 BPM with original music by Laguna Seca." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://lagunaseca70.com/" />
-  <meta property="og:image" content="https://lagunaseca70.com/social-preview.png" />
-  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image" content="https://lagunaseca70.com/social-preview.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
 
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Laguna Sneca - A Mini Game by Laguna Seca" />
-  <meta name="twitter:description" content="Retro snake, sacred painting, 105 BPM. Play Laguna Sneca in your browser." />
-  <meta name="twitter:image" content="https://lagunaseca70.com/social-preview.png" />
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="game/laguna-logo.png" />
+  <meta name="twitter:title" content="Laguna Sneca – A Mini Game by Laguna Seca" />
+  <meta name="twitter:description" content="Snake, but synced to 105 BPM. Play in your browser with original Laguna Seca music." />
+  <meta name="twitter:image" content="https://lagunaseca70.com/social-preview.jpg" />
 
   <style>
     :root {
@@ -215,6 +207,7 @@
       font-size: 9px;
       line-height: 1.5;
       color: rgba(255, 255, 255, 0.8);
+      margin-bottom: 8px;
     }
 
     .footer a {
@@ -228,61 +221,90 @@
 
     /* Newsletter form */
     .newsletter {
-  margin-top: 6px;
-  text-align: center;
-}
+      margin-top: 6px;
+      text-align: center;
+    }
 
-.newsletter-label {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 9px;
-  opacity: 0.8;
-  letter-spacing: 0.03em;
-}
+    .newsletter-label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 9px;
+      opacity: 0.8;
+      letter-spacing: 0.03em;
+    }
 
-.newsletter-row {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-}
+    .newsletter-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
 
-.newsletter-row input[type="email"] {
-  flex: 1;
-  max-width: 165px;
-  padding: 5px 8px;
-  border-radius: 18px;
-  border: none;
-  font-size: 10.5px;
-  height: 28px;
-}
+    .newsletter-row input[type="email"] {
+      flex: 1;
+      max-width: 150px;
+      padding: 5px 8px;
+      border-radius: 18px;
+      border: none;
+      font-size: 10.5px;
+      height: 28px;
+    }
 
-.newsletter-row button {
-  padding: 5px 12px;
-  border-radius: 18px;
-  border: none;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  cursor: pointer;
-  background: #ffffff;
-  color: #210c3b;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
-  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
-  height: 28px;
-}
+    .newsletter-row button {
+      padding: 5px 12px;
+      border-radius: 18px;
+      border: none;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      cursor: pointer;
+      background: #ffffff;
+      color: #210c3b;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+      height: 28px;
+    }
 
-.newsletter-row button:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.04);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45);
-}
+    .newsletter-row button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.04);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45);
+    }
 
-.newsletter-row button:active {
-  transform: translateY(1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-}
+    .newsletter-row button:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
 
+    .newsletter-row button:disabled {
+      opacity: 0.6;
+      cursor: default;
+      transform: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+    }
+
+    .newsletter-feedback {
+      text-align: center;
+      font-size: 10px;
+      margin-top: 6px;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 200ms ease-out, transform 200ms ease-out;
+      pointer-events: none;
+    }
+
+    .newsletter-feedback.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    #newsletter-success {
+      color: var(--snake-body);
+    }
+
+    #newsletter-error {
+      color: var(--food-color);
+    }
 
     @media (max-width: 480px) {
       .cabinet-wrapper {
@@ -345,32 +367,43 @@
         <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">
           Buy me a coffee
         </a>
+      </div>
 
-        <form
-  class="newsletter"
-  action="https://buttondown.com/api/emails/embed-subscribe/LagunaSeca70"
-  method="post"
-  target="_blank"
->
-  <label for="newsletter-email" class="newsletter-label">
-    Join the Laguna Seca mailing list:
-  </label>
+      <!-- Newsletter form -->
+      <form
+        id="newsletter-form"
+        class="newsletter"
+        action="https://buttondown.com/api/emails/embed-subscribe/LagunaSeca70"
+        method="post"
+        target="popupwindow"
+        onsubmit="window.open('https://buttondown.com/LagunaSeca70','popupwindow')"
+      >
+        <label for="newsletter-email" class="newsletter-label">
+          Join the Laguna Seca mailing list:
+        </label>
 
-  <div class="newsletter-row">
-    <input
-      id="newsletter-email"
-      type="email"
-      name="email"
-      required
-      placeholder="your@email.com"
-    />
-    <button type="submit">Join</button>
-  </div>
-</form>
+        <div class="newsletter-row">
+          <input
+            id="newsletter-email"
+            type="email"
+            name="email"
+            required
+            placeholder="your@email.com"
+          />
+          <button type="submit">Join</button>
+        </div>
+      </form>
+
+      <div id="newsletter-success" class="newsletter-feedback">
+        ✔ Thanks for joining! Check your inbox for confirmation.
+      </div>
+      <div id="newsletter-error" class="newsletter-feedback">
+        Please enter a valid email address.
       </div>
     </div>
   </div>
 
+  <!-- Game script (unchanged logic) -->
   <script>
     // -----------------------------
     // Core settings
@@ -380,7 +413,7 @@
     const CELL_SIZE = 24;
     const GAME_WIDTH = GRID_COLS * CELL_SIZE;
     const GAME_HEIGHT = GRID_ROWS * CELL_SIZE;
-    const TICK_MS = 143;       // 4 moves per beat at 105 BPM (roughly)
+    const TICK_MS = 145;       // snappier but still locked
     const START_DELAY_MS = 200;
 
     const canvas = document.getElementById("gameCanvas");
@@ -443,19 +476,19 @@
       DOWN:  { x:  0, y:  1 }
     };
 
-    // Snake is head-first: snake[0] is head
+    // Snake is HEAD-FIRST: snake[0] is head
     let snake;
     let direction;
     let pendingDirection;
     let food;
     let score;
-    let gameState = "start"; // "start" | "playing" | "paused" | "dead"
+    let gameState = "start"; // "start" | "playing" | "dead"
     let lastTickTime = 0;
     let tickId = null;
 
     function resetGame() {
-      const START_ROW = 15;
-      const startX = Math.floor(GRID_COLS / 2) - 2;
+      const START_ROW = 15; // a bit lower, between logo and text
+      const startX = Math.floor(GRID_COLS / 2) - 2; // centre 5-length snake
 
       snake = [
         { x: startX + 0, y: START_ROW }, // head (leftmost)
@@ -486,34 +519,13 @@
     // -----------------------------
     // Input handling
     // -----------------------------
-    function togglePause() {
-      if (gameState === "playing") {
-        gameState = "paused";
-        document.body.classList.remove("playing");
-        music.pause();
-      } else if (gameState === "paused") {
-        gameState = "playing";
-        document.body.classList.add("playing");
-        music.play().catch(() => {});
-        lastTickTime = performance.now();
-      }
-    }
-
     function setDirectionFromKey(key) {
-      // Space bar controls start, restart, and pause
-      if (key === " ") {
-        if (gameState === "start") {
-          startGame();
-        } else if (gameState === "dead") {
-          restartAfterDeath();
-        } else if (gameState === "playing" || gameState === "paused") {
-          togglePause();
-        }
-        return;
-      }
-
       if (gameState === "start") {
         startGame();
+        return;
+      }
+      if (gameState === "dead" && key === " ") {
+        restartAfterDeath();
         return;
       }
 
@@ -558,6 +570,12 @@
           const t = e.touches[0];
           touchStartX = t.clientX;
           touchStartY = t.clientY;
+
+          if (gameState === "start") {
+            startGame();
+          } else if (gameState === "dead") {
+            restartAfterDeath();
+          }
         }
         e.preventDefault();
       },
@@ -594,23 +612,6 @@
     canvas.addEventListener(
       "touchend",
       (e) => {
-        if (touchStartX != null && touchStartY != null) {
-          const t = e.changedTouches[0];
-          const dx = t.clientX - touchStartX;
-          const dy = t.clientY - touchStartY;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          // Treat a short tap as start / restart / pause toggle
-          if (distance < 10) {
-            if (gameState === "start") {
-              startGame();
-            } else if (gameState === "dead") {
-              restartAfterDeath();
-            } else if (gameState === "playing" || gameState === "paused") {
-              togglePause();
-            }
-          }
-        }
         touchStartX = null;
         touchStartY = null;
         e.preventDefault();
@@ -690,7 +691,7 @@
         return;
       }
 
-      // Self collision
+      // Self collision: check new head against whole snake
       if (snake.some((seg) => seg.x === newHead.x && seg.y === newHead.y)) {
         handleDeath();
         return;
@@ -742,7 +743,7 @@
         drawCell(seg.x, seg.y, false);
       }
 
-      // Draw head last
+      // Draw head last so it sits on top
       const head = snake[0];
       drawCell(head.x, head.y, true);
     }
@@ -763,11 +764,11 @@
       }
     }
 
-    // Constant top-down eyes
+    // Constant top-down eyes (no direction dependence)
     function drawHeadEyes(px, py) {
       const eyeSize = Math.floor(CELL_SIZE / 5);
       const offsetX = Math.floor(CELL_SIZE / 4);
-      const offsetY = Math.floor(CELL_SIZE / 6);
+      const offsetY = Math.floor(CELL_SIZE / 6); // a bit closer to the top
 
       ctx.fillStyle = "#000000";
 
@@ -822,13 +823,14 @@
         GAME_HEIGHT * 0.65
       );
       ctx.fillText(
-        "On mobile: swipe to move, tap to pause",
+        "On mobile: swipe to move",
         GAME_WIDTH / 2,
         GAME_HEIGHT * 0.72
       );
     }
 
     function drawDeathOverlay() {
+      // Draw YOU DIED image with preserved aspect ratio, centred
       if (deathImage.complete && deathImage.width && deathImage.height) {
         const imgRatio = deathImage.width / deathImage.height;
         const canvasRatio = GAME_WIDTH / GAME_HEIGHT;
@@ -849,6 +851,8 @@
 
         ctx.drawImage(deathImage, drawX, drawY, drawWidth, drawHeight);
       }
+
+      // No extra text here; image already has "Press Space to retry"
     }
 
     function draw() {
@@ -874,6 +878,61 @@
     canvas.addEventListener("click", () => {
       canvas.focus();
     });
+  </script>
+
+  <!-- Newsletter UX script -->
+  <script>
+    (function () {
+      const form = document.getElementById("newsletter-form");
+      if (!form) return;
+
+      const emailInput = form.querySelector("input[type='email']");
+      const submitBtn = form.querySelector("button[type='submit']");
+      const successBox = document.getElementById("newsletter-success");
+      const errorBox = document.getElementById("newsletter-error");
+
+      function showFeedback(boxToShow) {
+        [successBox, errorBox].forEach((box) => {
+          if (!box) return;
+          box.classList.remove("visible");
+        });
+        if (boxToShow) {
+          boxToShow.classList.add("visible");
+        }
+      }
+
+      form.addEventListener("submit", function (e) {
+        const value = emailInput.value.trim();
+        const basicValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+        // Local validation
+        if (!value || !basicValid || (emailInput.validity && !emailInput.validity.valid)) {
+          e.preventDefault();
+          showFeedback(errorBox);
+          return;
+        }
+
+        // Valid: let Buttondown handle the popup via inline onsubmit
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Sending…";
+        showFeedback(null);
+
+        // Optimistic success
+        setTimeout(() => {
+          emailInput.value = "";
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Join";
+          showFeedback(successBox);
+
+          // Hide success after a few seconds
+          setTimeout(() => {
+            if (successBox) {
+              successBox.classList.remove("visible");
+            }
+          }, 5000);
+        }, 1200);
+      });
+    })();
   </script>
 </body>
 </html>
