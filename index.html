@@ -10,24 +10,25 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="game/laguna-logo.png" />
 
-  <!-- Social preview -->
-  <meta property="og:title" content="Laguna Sneca – A Mini Game by Laguna Seca" />
-  <meta property="og:description" content="Play Laguna Sneca, a mini browser snake game locked to 105 BPM with original music by Laguna Seca." />
+  <!-- Open Graph / social preview -->
   <meta property="og:type" content="website" />
+  <meta property="og:title" content="Laguna Sneca – Mini Game by Laguna Seca" />
+  <meta property="og:description" content="Play a tiny 105 BPM arcade snake game synced to music by Laguna Seca." />
   <meta property="og:url" content="https://lagunaseca70.com/" />
   <meta property="og:image" content="https://lagunaseca70.com/social-preview.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
 
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Laguna Sneca – A Mini Game by Laguna Seca" />
-  <meta name="twitter:description" content="Snake, but synced to 105 BPM. Play in your browser with original Laguna Seca music." />
+  <meta name="twitter:title" content="Laguna Sneca – Mini Game by Laguna Seca" />
+  <meta name="twitter:description" content="Play a tiny 105 BPM arcade snake game synced to music by Laguna Seca." />
   <meta name="twitter:image" content="https://lagunaseca70.com/social-preview.jpg" />
 
   <style>
     :root {
       --bg-gold: #e4b93b;
       --cabinet-purple: #210c3b;
+      --cabinet-purple-inner: #18072c;
       --button-blue: #13b0e5;
       --button-pink: #ff3a7f;
       --text-light: #ffffff;
@@ -88,7 +89,7 @@
       box-shadow:
         0 20px 40px rgba(0, 0, 0, 0.6),
         0 0 0 2px rgba(255, 255, 255, 0.08);
-      padding: 24px 20px 20px;
+      padding: 24px 20px 8px; /* tighter bottom padding */
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -207,7 +208,6 @@
       font-size: 9px;
       line-height: 1.5;
       color: rgba(255, 255, 255, 0.8);
-      margin-bottom: 8px;
     }
 
     .footer a {
@@ -286,7 +286,7 @@
     .newsletter-feedback {
       text-align: center;
       font-size: 10px;
-      margin-top: 6px;
+      margin-top: 4px;
       opacity: 0;
       transform: translateY(4px);
       transition: opacity 200ms ease-out, transform 200ms ease-out;
@@ -310,10 +310,10 @@
       .cabinet-wrapper {
         padding: 8px 4px 16px;
       }
-     .cabinet {
-  padding: 24px 20px 10px;
-}
-
+      .cabinet {
+        padding: 20px 14px 6px; /* tight bottom on mobile too */
+        border-radius: 26px;
+      }
       .screen-shell {
         padding: 8px;
       }
@@ -403,7 +403,6 @@
     </div>
   </div>
 
-  <!-- Game script (unchanged logic) -->
   <script>
     // -----------------------------
     // Core settings
@@ -413,7 +412,7 @@
     const CELL_SIZE = 24;
     const GAME_WIDTH = GRID_COLS * CELL_SIZE;
     const GAME_HEIGHT = GRID_ROWS * CELL_SIZE;
-    const TICK_MS = 145;       // snappier but still locked
+    const TICK_MS = 145;       // snappy, still in time with loop
     const START_DELAY_MS = 200;
 
     const canvas = document.getElementById("gameCanvas");
@@ -482,13 +481,13 @@
     let pendingDirection;
     let food;
     let score;
-    let gameState = "start"; // "start" | "playing" | "dead"
+    let gameState = "start"; // "start" | "playing" | "paused" | "dead"
     let lastTickTime = 0;
     let tickId = null;
 
     function resetGame() {
-      const START_ROW = 15; // a bit lower, between logo and text
-      const startX = Math.floor(GRID_COLS / 2) - 2; // centre 5-length snake
+      const START_ROW = 15;
+      const startX = Math.floor(GRID_COLS / 2) - 2;
 
       snake = [
         { x: startX + 0, y: START_ROW }, // head (leftmost)
@@ -520,13 +519,23 @@
     // Input handling
     // -----------------------------
     function setDirectionFromKey(key) {
-      if (gameState === "start") {
-        startGame();
-        return;
-      }
-      if (gameState === "dead" && key === " ") {
-        restartAfterDeath();
-        return;
+      if (key === " ") {
+        if (gameState === "start") {
+          startGame();
+          return;
+        }
+        if (gameState === "dead") {
+          restartAfterDeath();
+          return;
+        }
+        if (gameState === "playing") {
+          pauseGame();
+          return;
+        }
+        if (gameState === "paused") {
+          resumeGame();
+          return;
+        }
       }
 
       if (gameState !== "playing") return;
@@ -654,6 +663,15 @@
       lastTickTime = performance.now() + START_DELAY_MS;
     }
 
+    function pauseGame() {
+      gameState = "paused";
+    }
+
+    function resumeGame() {
+      gameState = "playing";
+      lastTickTime = performance.now();
+    }
+
     function tick(timestamp) {
       if (!lastTickTime) {
         lastTickTime = timestamp;
@@ -674,7 +692,7 @@
 
       direction = pendingDirection;
 
-      const head = snake[0]; // head-first
+      const head = snake[0];
       const newHead = {
         x: head.x + direction.x,
         y: head.y + direction.y
@@ -691,7 +709,7 @@
         return;
       }
 
-      // Self collision: check new head against whole snake
+      // Self collision
       if (snake.some((seg) => seg.x === newHead.x && seg.y === newHead.y)) {
         handleDeath();
         return;
@@ -699,14 +717,12 @@
 
       const willGrow = newHead.x === food.x && newHead.y === food.y;
 
-      // Add new head at front
       snake.unshift(newHead);
 
       if (willGrow) {
         score += 1;
         placeFood();
       } else {
-        // Remove tail
         snake.pop();
       }
     }
@@ -737,13 +753,13 @@
       ctx.lineWidth = 2;
       ctx.strokeStyle = "#000000";
 
-      // Draw body segments (tail to second segment)
+      // body (tail to just before head)
       for (let i = snake.length - 1; i > 0; i--) {
         const seg = snake[i];
         drawCell(seg.x, seg.y, false);
       }
 
-      // Draw head last so it sits on top
+      // head
       const head = snake[0];
       drawCell(head.x, head.y, true);
     }
@@ -752,7 +768,6 @@
       const px = gridX * CELL_SIZE;
       const py = gridY * CELL_SIZE;
 
-      // Head and body same colour
       ctx.fillStyle = "#7cf35b";
       ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
 
@@ -764,11 +779,11 @@
       }
     }
 
-    // Constant top-down eyes (no direction dependence)
+    // Constant top-down eyes
     function drawHeadEyes(px, py) {
       const eyeSize = Math.floor(CELL_SIZE / 5);
       const offsetX = Math.floor(CELL_SIZE / 4);
-      const offsetY = Math.floor(CELL_SIZE / 6); // a bit closer to the top
+      const offsetY = Math.floor(CELL_SIZE / 6);
 
       ctx.fillStyle = "#000000";
 
@@ -830,7 +845,6 @@
     }
 
     function drawDeathOverlay() {
-      // Draw YOU DIED image with preserved aspect ratio, centred
       if (deathImage.complete && deathImage.width && deathImage.height) {
         const imgRatio = deathImage.width / deathImage.height;
         const canvasRatio = GAME_WIDTH / GAME_HEIGHT;
@@ -851,8 +865,20 @@
 
         ctx.drawImage(deathImage, drawX, drawY, drawWidth, drawHeight);
       }
+      // Text is baked into the image
+    }
 
-      // No extra text here; image already has "Press Space to retry"
+    function drawPausedOverlay() {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "18px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Paused", GAME_WIDTH / 2, GAME_HEIGHT * 0.5);
+      ctx.font = "12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.fillText("Press Space to resume", GAME_WIDTH / 2, GAME_HEIGHT * 0.57);
     }
 
     function draw() {
@@ -866,8 +892,65 @@
         drawStartOverlay();
       } else if (gameState === "dead") {
         drawDeathOverlay();
+      } else if (gameState === "paused") {
+        drawPausedOverlay();
       }
     }
+
+    // -----------------------------
+    // Newsletter interaction
+    // -----------------------------
+    document.addEventListener("DOMContentLoaded", () => {
+      const form = document.getElementById("newsletter-form");
+      if (!form) return;
+
+      const emailInput = document.getElementById("newsletter-email");
+      const submitButton = form.querySelector('button[type="submit"]');
+      const successEl = document.getElementById("newsletter-success");
+      const errorEl = document.getElementById("newsletter-error");
+
+      const originalButtonText = submitButton.textContent;
+
+      function showFeedback(target) {
+        [successEl, errorEl].forEach((el) => {
+          if (!el) return;
+          if (el === target) {
+            el.classList.add("visible");
+          } else {
+            el.classList.remove("visible");
+          }
+        });
+      }
+
+      form.addEventListener("submit", (e) => {
+        const email = emailInput.value.trim();
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        // Invalid email: stop, show error
+        if (!emailPattern.test(email)) {
+          e.preventDefault();
+          showFeedback(errorEl);
+          emailInput.focus();
+          return;
+        }
+
+        // Valid email: let the form submit to Buttondown, but show UI state
+        showFeedback(null);
+        submitButton.disabled = true;
+        submitButton.textContent = "Sending…";
+
+        setTimeout(() => {
+          submitButton.disabled = false;
+          submitButton.textContent = originalButtonText;
+          showFeedback(successEl);
+        }, 1000);
+      });
+
+      // Hide error when user starts typing again
+      emailInput.addEventListener("input", () => {
+        if (errorEl) errorEl.classList.remove("visible");
+      });
+    });
 
     // -----------------------------
     // Kick off
@@ -878,61 +961,6 @@
     canvas.addEventListener("click", () => {
       canvas.focus();
     });
-  </script>
-
-  <!-- Newsletter UX script -->
-  <script>
-    (function () {
-      const form = document.getElementById("newsletter-form");
-      if (!form) return;
-
-      const emailInput = form.querySelector("input[type='email']");
-      const submitBtn = form.querySelector("button[type='submit']");
-      const successBox = document.getElementById("newsletter-success");
-      const errorBox = document.getElementById("newsletter-error");
-
-      function showFeedback(boxToShow) {
-        [successBox, errorBox].forEach((box) => {
-          if (!box) return;
-          box.classList.remove("visible");
-        });
-        if (boxToShow) {
-          boxToShow.classList.add("visible");
-        }
-      }
-
-      form.addEventListener("submit", function (e) {
-        const value = emailInput.value.trim();
-        const basicValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-
-        // Local validation
-        if (!value || !basicValid || (emailInput.validity && !emailInput.validity.valid)) {
-          e.preventDefault();
-          showFeedback(errorBox);
-          return;
-        }
-
-        // Valid: let Buttondown handle the popup via inline onsubmit
-        submitBtn.disabled = true;
-        submitBtn.textContent = "Sending…";
-        showFeedback(null);
-
-        // Optimistic success
-        setTimeout(() => {
-          emailInput.value = "";
-          submitBtn.disabled = false;
-          submitBtn.textContent = "Join";
-          showFeedback(successBox);
-
-          // Hide success after a few seconds
-          setTimeout(() => {
-            if (successBox) {
-              successBox.classList.remove("visible");
-            }
-          }, 5000);
-        }, 1200);
-      });
-    })();
   </script>
 </body>
 </html>
