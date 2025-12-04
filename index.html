@@ -7,25 +7,21 @@
   <!-- Mobile + scaling -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Basic description -->
-  <meta name="description" content="Laguna Sneca is a retro mini game with music by Laguna Seca. Play instantly in your browser on desktop or mobile.">
+  <!-- Open Graph / Social -->
+  <meta property="og:title" content="Laguna Sneca – A Mini Game by Laguna Seca" />
+  <meta property="og:description" content="Play Laguna Sneca, a retro mini snake game synced to a 105 BPM Laguna Seca loop." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://lagunaseca70.com/" />
+  <meta property="og:image" content="https://lagunaseca70.com/social-preview.jpg" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
 
-  <!-- Open Graph / WhatsApp / Facebook -->
-  <meta property="og:title" content="Laguna Sneca – A Mini Game by Laguna Seca">
-  <meta property="og:description" content="Laguna Sneca is a retro mini game with music by Laguna Seca. Play instantly in your browser on desktop or mobile.">
-  <meta property="og:image" content="https://lagunaseca70.com/game/social-preview.jpg">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://lagunaseca70.com">
-  <meta property="og:site_name" content="Laguna Seca">
-  <meta property="fb:app_id" content="111111111111111">
-
-  <!-- Twitter -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Laguna Sneca – A Mini Game by Laguna Seca">
-  <meta name="twitter:description" content="Laguna Sneca is a retro mini game with music by Laguna Seca. Play instantly in your browser on desktop or mobile.">
-  <meta name="twitter:image" content="https://lagunaseca70.com/game/social-preview.jpg">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Laguna Sneca – A Mini Game by Laguna Seca" />
+  <meta name="twitter:description" content="Retro snake, sacred painting, 105 BPM. Play Laguna Sneca in your browser." />
+  <meta name="twitter:image" content="https://lagunaseca70.com/social-preview.jpg" />
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="game/laguna-logo.png" />
@@ -66,6 +62,7 @@
       overflow-x: hidden;
     }
 
+    /* Disable page scroll during play so arrows do not scroll */
     body.playing {
       overflow: hidden;
     }
@@ -297,7 +294,7 @@
     const CELL_SIZE = 24;
     const GAME_WIDTH = GRID_COLS * CELL_SIZE;
     const GAME_HEIGHT = GRID_ROWS * CELL_SIZE;
-    const TICK_MS = 145;       // snappier but still locked
+    const TICK_MS = 145;
     const START_DELAY_MS = 200;
 
     const canvas = document.getElementById("gameCanvas");
@@ -371,8 +368,8 @@
     let tickId = null;
 
     function resetGame() {
-      const START_ROW = 15; // a bit lower, between logo and text
-      const startX = Math.floor(GRID_COLS / 2) - 2; // centre 5-length snake
+      const START_ROW = 15;
+      const startX = Math.floor(GRID_COLS / 2) - 2;
 
       snake = [
         { x: startX + 0, y: START_ROW }, // head (leftmost)
@@ -558,13 +555,12 @@
 
       direction = pendingDirection;
 
-      const head = snake[0]; // head-first
+      const head = snake[0];
       const newHead = {
         x: head.x + direction.x,
         y: head.y + direction.y
       };
 
-      // Wall collision
       if (
         newHead.x < 0 ||
         newHead.x >= GRID_COLS ||
@@ -575,7 +571,6 @@
         return;
       }
 
-      // Self collision: check new head against whole snake
       if (snake.some((seg) => seg.x === newHead.x && seg.y === newHead.y)) {
         handleDeath();
         return;
@@ -583,14 +578,12 @@
 
       const willGrow = newHead.x === food.x && newHead.y === food.y;
 
-      // Add new head at front
       snake.unshift(newHead);
 
       if (willGrow) {
         score += 1;
         placeFood();
       } else {
-        // Remove tail
         snake.pop();
       }
     }
@@ -621,13 +614,11 @@
       ctx.lineWidth = 2;
       ctx.strokeStyle = "#000000";
 
-      // Draw body segments (tail to second segment)
       for (let i = snake.length - 1; i > 0; i--) {
         const seg = snake[i];
         drawCell(seg.x, seg.y, false);
       }
 
-      // Draw head last so it sits on top
       const head = snake[0];
       drawCell(head.x, head.y, true);
     }
@@ -636,7 +627,6 @@
       const px = gridX * CELL_SIZE;
       const py = gridY * CELL_SIZE;
 
-      // Head and body same colour
       ctx.fillStyle = "#7cf35b";
       ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
 
@@ -648,18 +638,14 @@
       }
     }
 
-    // Constant top-down eyes (no direction dependence)
     function drawHeadEyes(px, py) {
       const eyeSize = Math.floor(CELL_SIZE / 5);
       const offsetX = Math.floor(CELL_SIZE / 4);
-      const offsetY = Math.floor(CELL_SIZE / 6); // a bit closer to the top
+      const offsetY = Math.floor(CELL_SIZE / 6);
 
       ctx.fillStyle = "#000000";
 
-      // Left eye
       ctx.fillRect(px + offsetX, py + offsetY, eyeSize, eyeSize);
-
-      // Right eye
       ctx.fillRect(
         px + CELL_SIZE - offsetX - eyeSize,
         py + offsetY,
@@ -714,7 +700,6 @@
     }
 
     function drawDeathOverlay() {
-      // Draw YOU DIED image with preserved aspect ratio, centred
       if (deathImage.complete && deathImage.width && deathImage.height) {
         const imgRatio = deathImage.width / deathImage.height;
         const canvasRatio = GAME_WIDTH / GAME_HEIGHT;
@@ -735,8 +720,6 @@
 
         ctx.drawImage(deathImage, drawX, drawY, drawWidth, drawHeight);
       }
-
-      // No extra text here; image already has "Press Space to retry"
     }
 
     function draw() {
