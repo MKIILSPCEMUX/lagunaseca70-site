@@ -568,65 +568,89 @@
       { passive: false }
     );
 
-    // Touch controls
-    let touchStartX = null;
-    let touchStartY = null;
+  // Touch controls (more sensitive)
+const SWIPE_THRESHOLD = 4;      // base distance in px
+const QUICK_SWIPE_TIME = 120;   // ms. Fast swipes can be a bit shorter.
+const QUICK_SWIPE_MIN = 3;      // px for a very fast swipe
 
-    canvas.addEventListener(
-      "touchstart",
-      (e) => {
-        if (e.touches.length > 0) {
-          const t = e.touches[0];
-          touchStartX = t.clientX;
-          touchStartY = t.clientY;
+let touchStartX = null;
+let touchStartY = null;
+let touchStartTime = null;
 
-          if (gameState === "start") {
-            startGame();
-          } else if (gameState === "dead") {
-            restartAfterDeath();
-          }
+canvas.addEventListener(
+  "touchstart",
+  (e) => {
+    if (e.touches.length > 0) {
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchStartTime = performance.now();
+
+      if (gameState === "start") {
+        startGame();
+      } else if (gameState === "dead") {
+        restartAfterDeath();
+      }
+    }
+    e.preventDefault();
+  },
+  { passive: false }
+);
+
+canvas.addEventListener(
+  "touchmove",
+  (e) => {
+    if (
+      e.touches.length > 0 &&
+      touchStartX != null &&
+      touchStartY != null
+    ) {
+      const t = e.touches[0];
+      const dx = t.clientX - touchStartX;
+      const dy = t.clientY - touchStartY;
+
+      const absX = Math.abs(dx);
+      const absY = Math.abs(dy);
+
+      const dt = performance.now() - (touchStartTime || 0);
+      const fastSwipe =
+        dt < QUICK_SWIPE_TIME &&
+        (absX > QUICK_SWIPE_MIN || absY > QUICK_SWIPE_MIN);
+
+      const threshold = fastSwipe ? QUICK_SWIPE_MIN : SWIPE_THRESHOLD;
+
+      if (absX > absY) {
+        // horizontal swipe
+        if (dx > threshold && direction !== DIRECTION.LEFT) {
+          pendingDirection = DIRECTION.RIGHT;
+        } else if (dx < -threshold && direction !== DIRECTION.RIGHT) {
+          pendingDirection = DIRECTION.LEFT;
         }
-        e.preventDefault();
-      },
-      { passive: false }
-    );
-
-    canvas.addEventListener(
-      "touchmove",
-      (e) => {
-        if (e.touches.length > 0 && touchStartX != null && touchStartY != null) {
-          const t = e.touches[0];
-          const dx = t.clientX - touchStartX;
-          const dy = t.clientY - touchStartY;
-
-          if (Math.abs(dx) > Math.abs(dy)) {
-            if (dx > 10 && direction !== DIRECTION.LEFT) {
-              pendingDirection = DIRECTION.RIGHT;
-            } else if (dx < -10 && direction !== DIRECTION.RIGHT) {
-              pendingDirection = DIRECTION.LEFT;
-            }
-          } else {
-            if (dy > 10 && direction !== DIRECTION.UP) {
-              pendingDirection = DIRECTION.DOWN;
-            } else if (dy < -10 && direction !== DIRECTION.DOWN) {
-              pendingDirection = DIRECTION.UP;
-            }
-          }
+      } else {
+        // vertical swipe
+        if (dy > threshold && direction !== DIRECTION.UP) {
+          pendingDirection = DIRECTION.DOWN;
+        } else if (dy < -threshold && direction !== DIRECTION.DOWN) {
+          pendingDirection = DIRECTION.UP;
         }
-        e.preventDefault();
-      },
-      { passive: false }
-    );
+      }
+    }
+    e.preventDefault();
+  },
+  { passive: false }
+);
 
-    canvas.addEventListener(
-      "touchend",
-      (e) => {
-        touchStartX = null;
-        touchStartY = null;
-        e.preventDefault();
-      },
-      { passive: false }
-    );
+canvas.addEventListener(
+  "touchend",
+  (e) => {
+    touchStartX = null;
+    touchStartY = null;
+    touchStartTime = null;
+    e.preventDefault();
+  },
+  { passive: false }
+);
+
 
     // -----------------------------
     // Game loop
