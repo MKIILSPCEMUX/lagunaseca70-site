@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Audio project sidecars and scratch
+*.asd
+loopold.mp3
+
+# Local asset staging (not deployed)
+- darkstar_assets/
