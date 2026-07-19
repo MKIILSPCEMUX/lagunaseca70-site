@@ -418,7 +418,7 @@
     const scoreEl = document.getElementById('tScore');
     const hullEl = document.getElementById('tHull');
     const readoutEl = document.querySelector('.readout');
-    const GREEN = '#48d86b', HOT = '#eaffef', RED = '#e5482a', DIM = '#235a2c';
+    const GREEN = '#48d86b', HOT = '#eaffef', RED = '#e5482a', NEONPINK = '#ff4fa3', DIM = '#235a2c';
     const DPR = Math.min(window.devicePixelRatio || 1, 2);
     let W = 0, H = 0;
 
@@ -441,9 +441,10 @@
           BULLET_SPD = 6, FIRE_MS = 170, BULLET_LIFE = 68;
 
     // --- asteroids + game state ---
-    const AST_R = { 3: 26, 2: 16, 1: 9 }, AST_SPD = { 3: 0.5, 2: 0.85, 1: 1.25 },
+    const AST_R = { 3: 26, 2: 16, 1: 9 }, AST_SPD = { 3: 0.55, 2: 0.95, 1: 1.5 },
           AST_SCORE = { 3: 25, 2: 15, 1: 10 }, MAX_AST = 44;
     const asteroids = [];
+    const laser = { on: false, x0: 0, y0: 0, dx: 0, dy: 0, len: 0 };
     let score = 0, integrity = 3, invuln = 0, hitFlash = 0, gameOver = false;
 
     function makeAsteroid(size, x, y, fragment) {
@@ -482,7 +483,7 @@
       return { cad: 4, size: 3, flood: 1 };         // certain death
     }
     function onBeat() {
-      const d = diffAt(barNum);
+      const d = diffAt(barNum + 1);
       if (!d.cad) return;
       const go = d.cad === 4 ? true : d.cad === 2 ? (beatInBar % 2 === 0) : (beatInBar === 0);
       if (!go) return;
@@ -569,7 +570,7 @@
     window.addEventListener('keydown', e => {
       if (CONTROL.includes(e.key)) { e.preventDefault(); start(); }
       keys[e.key] = true;
-      if (e.key === ' ' || e.key === 'Spacebar') { if (gameOver) resetGame(); else shoot(); }
+      if (e.key === ' ' || e.key === 'Spacebar') { if (gameOver) resetGame(); }
       if (e.key === 'm' || e.key === 'M') toggleMute();
     });
     window.addEventListener('keyup', e => { keys[e.key] = false; });
@@ -594,6 +595,8 @@
       else if (ship.x > W - ship.r) { ship.x = W - ship.r; if (ship.vx > 0) ship.vx = 0; }
       if (ship.y < ship.r) { ship.y = ship.r; if (ship.vy < 0) ship.vy = 0; }
       else if (ship.y > H - ship.r) { ship.y = H - ship.r; if (ship.vy > 0) ship.vy = 0; }
+      // weapon: hold Space to fire; from bar 101 it becomes a laser
+      if (keys[' '] || keys['Spacebar']) { if ((barNum + 1) >= 101) fireLaser(); else shoot(); }
       // bullets die at the edge (no wrap)
       for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
@@ -642,9 +645,10 @@
       ctx.rotate(ship.a);
       ctx.lineWidth = 1.6;
       ctx.lineJoin = 'round';
-      ctx.shadowColor = GREEN;
-      ctx.shadowBlur = 6;
-      ctx.strokeStyle = HOT;
+      const hurt = invuln > 0 && !gameOver;
+      ctx.shadowColor = hurt ? NEONPINK : GREEN;
+      ctx.shadowBlur = hurt ? 10 : 6;
+      ctx.strokeStyle = hurt ? NEONPINK : HOT;
       ctx.beginPath();
       ctx.moveTo(ship.r, 0);
       ctx.lineTo(-ship.r * 0.8, ship.r * 0.72);
@@ -688,23 +692,47 @@
       ctx.shadowBlur = 0;
     }
 
+    function fireLaser() {
+      const dx = Math.cos(ship.a), dy = Math.sin(ship.a);
+      const x0 = ship.x + dx * ship.r, y0 = ship.y + dy * ship.r;
+      laser.on = true; laser.x0 = x0; laser.y0 = y0; laser.dx = dx; laser.dy = dy; laser.len = Math.max(W, H) * 1.5;
+      for (let i = asteroids.length - 1; i >= 0; i--) {
+        const a = asteroids[i], px = a.x - x0, py = a.y - y0;
+        const t = px * dx + py * dy;
+        if (t < 0) continue;                       // behind the ship
+        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; asteroids.splice(i, 1); }
+      }
+    }
+    function drawLaser() {
+      if (!laser.on) return;
+      const ex = laser.x0 + laser.dx * laser.len, ey = laser.y0 + laser.dy * laser.len;
+      ctx.save();
+      ctx.shadowColor = GREEN; ctx.shadowBlur = 12;
+      ctx.strokeStyle = GREEN; ctx.lineWidth = 5; ctx.globalAlpha = 0.45;
+      ctx.beginPath(); ctx.moveTo(laser.x0, laser.y0); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.strokeStyle = HOT; ctx.lineWidth = 1.8; ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.moveTo(laser.x0, laser.y0); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.restore(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    }
+
     function drawOverlays() {
+      const rbar = barNum + 1;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      if (!gameOver && barNum <= 4) {
+      if (!gameOver && rbar <= 4) {
         ctx.shadowColor = GREEN; ctx.shadowBlur = 10;
         ctx.fillStyle = HOT; ctx.font = '700 22px "Courier New", monospace';
         ctx.fillText('GET READY', W / 2, H / 2 - 8);
         ctx.shadowBlur = 0; ctx.fillStyle = GREEN; ctx.font = '10px "Courier New", monospace';
-        ctx.fillText('HOLD POSITION', W / 2, H / 2 + 16);
+        ctx.fillText('INCOMING ASTEROIDS', W / 2, H / 2 + 16);
       }
-      if (!gameOver && barNum >= 97 && barNum <= 100 && Math.floor(performance.now() / 220) % 2) {
+      if (!gameOver && rbar >= 97 && rbar <= 100 && Math.floor(performance.now() / 220) % 2) {
         ctx.shadowColor = RED; ctx.shadowBlur = 12;
         ctx.fillStyle = RED; ctx.font = '700 20px "Courier New", monospace';
         ctx.fillText('DANGER AHEAD', W / 2, H / 2);
         ctx.shadowBlur = 0;
       }
-      if (barNum >= 133) {
-        const t = Math.min(1, (barNum - 133) / 24);
+      if (rbar >= 133) {
+        const t = Math.min(1, (rbar - 133) / 24);
         const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.8);
         g.addColorStop(0, 'rgba(255,70,155,' + (0.10 + 0.4 * t) + ')');
         g.addColorStop(0.55, 'rgba(120,40,200,' + (0.05 + 0.25 * t) + ')');
@@ -716,8 +744,10 @@
 
     function loop() {
       ctx.clearRect(0, 0, W, H);
+      laser.on = false;
       if (started) { beatUpdate(); if (!gameOver) update(); }
       drawAsteroids();
+      drawLaser();
       drawBullets();
       drawShip();
       if (started) drawBeat();
