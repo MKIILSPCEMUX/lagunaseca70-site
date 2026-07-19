@@ -126,7 +126,7 @@
       max-width: 350px;
       height: auto;
       display: block;
-      transform: perspective(900px) rotateY(-15deg);
+      transform: perspective(1300px) rotateY(-8deg);
       transform-origin: left center;
       margin: 4px 0 0;
     }
@@ -313,6 +313,37 @@
     }
     .hull-foot a { color: var(--grey-dk); }
 
+    .game-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+    }
+    .start-hint {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      text-align: center;
+      pointer-events: none;
+      transition: opacity 0.35s ease;
+    }
+    .start-hint.hidden { opacity: 0; }
+    .sh-title {
+      font-size: 15px;
+      letter-spacing: 0.4em;
+      text-indent: 0.4em;
+      color: var(--crt-hot);
+      text-shadow: 0 0 10px rgba(72, 216, 176, 0.7);
+    }
+    .sh-sub { font-size: 10px; letter-spacing: 0.24em; color: var(--crt-green); }
+    .sh-note { font-size: 8.5px; letter-spacing: 0.14em; color: var(--crt-dim); }
+
     @media (max-width: 480px) {
       .wrap { padding: 10px 6px 18px; }
       .cabinet { padding: 16px 13px 12px; }
@@ -342,18 +373,16 @@
             <div class="tbox">&Omega;<br />1.12</div>
           </div>
           <div class="telemetry right">
-            <div class="tbox">&Theta;<br />3</div>
+            <div class="tbox">&Theta;<br /><span id="tHead">0</span></div>
             <div class="tbox">&Delta;<br />8.4</div>
             <div class="tbox hot">&Sigma; 7</div>
           </div>
 
-          <div class="screen-mid">
-            <div class="proto">PROTOTYPE</div>
-            <div class="proto-sub">CABINET SHELL &middot; BUILD IN PROGRESS</div>
-            <div class="beat">
-              <div class="beat-dot"></div>
-              <div class="beat-label">135 BPM</div>
-            </div>
+          <canvas id="game" class="game-canvas"></canvas>
+          <div class="start-hint" id="startHint">
+            <div class="sh-title">READY</div>
+            <div class="sh-sub">ARROWS TO FLY &middot; SPACE TO FIRE</div>
+            <div class="sh-note">Keyboard for now &middot; touch controls to come</div>
           </div>
 
           <div class="readout">NO.5</div>
@@ -375,5 +404,132 @@
       </div>
     </div>
   </div>
+  <script>
+  (function () {
+    const cv = document.getElementById('game');
+    const ctx = cv.getContext('2d');
+    const hint = document.getElementById('startHint');
+    const headEl = document.getElementById('tHead');
+    const GREEN = '#48d86b', HOT = '#eaffef', DIM = '#235a2c';
+    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    let W = 0, H = 0;
+
+    function resize() {
+      const r = cv.getBoundingClientRect();
+      W = r.width; H = r.height;
+      cv.width = Math.round(W * DPR);
+      cv.height = Math.round(H * DPR);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    }
+
+    const ship = { x: 0, y: 0, a: -Math.PI / 2, vx: 0, vy: 0, r: 11 };
+    function reset() { ship.x = W / 2; ship.y = H / 2; ship.a = -Math.PI / 2; ship.vx = 0; ship.vy = 0; }
+
+    const keys = {};
+    const bullets = [];
+    let started = false, thrusting = false, lastShot = 0;
+
+    const THRUST = 0.16, FRICTION = 0.99, MAXSPD = 4.4, ROT = 0.078,
+          BULLET_SPD = 6, FIRE_MS = 170, BULLET_LIFE = 68;
+
+    function start() { if (!started) { started = true; hint.classList.add('hidden'); } }
+
+    function shoot() {
+      const now = performance.now();
+      if (now - lastShot < FIRE_MS) return;
+      lastShot = now;
+      bullets.push({
+        x: ship.x + Math.cos(ship.a) * ship.r,
+        y: ship.y + Math.sin(ship.a) * ship.r,
+        vx: Math.cos(ship.a) * BULLET_SPD + ship.vx,
+        vy: Math.sin(ship.a) * BULLET_SPD + ship.vy,
+        life: BULLET_LIFE
+      });
+    }
+
+    const CONTROL = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Spacebar'];
+    window.addEventListener('keydown', e => {
+      if (CONTROL.includes(e.key)) { e.preventDefault(); start(); }
+      keys[e.key] = true;
+      if (e.key === ' ' || e.key === 'Spacebar') shoot();
+    });
+    window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+    function wrap(o) {
+      if (o.x < 0) o.x += W; else if (o.x > W) o.x -= W;
+      if (o.y < 0) o.y += H; else if (o.y > H) o.y -= H;
+    }
+
+    function update() {
+      if (keys['ArrowLeft']) ship.a -= ROT;
+      if (keys['ArrowRight']) ship.a += ROT;
+      thrusting = !!keys['ArrowUp'];
+      if (thrusting) { ship.vx += Math.cos(ship.a) * THRUST; ship.vy += Math.sin(ship.a) * THRUST; }
+      if (keys['ArrowDown']) { ship.vx *= 0.93; ship.vy *= 0.93; }
+      ship.vx *= FRICTION; ship.vy *= FRICTION;
+      const sp = Math.hypot(ship.vx, ship.vy);
+      if (sp > MAXSPD) { ship.vx *= MAXSPD / sp; ship.vy *= MAXSPD / sp; }
+      ship.x += ship.vx; ship.y += ship.vy; wrap(ship);
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.x += b.vx; b.y += b.vy; b.life--; wrap(b);
+        if (b.life <= 0) bullets.splice(i, 1);
+      }
+      if (headEl) headEl.textContent = ((Math.round(ship.a * 180 / Math.PI) + 90) % 360 + 360) % 360;
+    }
+
+    function drawShip() {
+      ctx.save();
+      ctx.translate(ship.x, ship.y);
+      ctx.rotate(ship.a);
+      ctx.lineWidth = 1.6;
+      ctx.lineJoin = 'round';
+      ctx.shadowColor = GREEN;
+      ctx.shadowBlur = 6;
+      ctx.strokeStyle = HOT;
+      ctx.beginPath();
+      ctx.moveTo(ship.r, 0);
+      ctx.lineTo(-ship.r * 0.8, ship.r * 0.72);
+      ctx.lineTo(-ship.r * 0.4, 0);
+      ctx.lineTo(-ship.r * 0.8, -ship.r * 0.72);
+      ctx.closePath();
+      ctx.stroke();
+      if (thrusting) {
+        ctx.strokeStyle = GREEN;
+        ctx.beginPath();
+        ctx.moveTo(-ship.r * 0.5, ship.r * 0.34);
+        ctx.lineTo(-ship.r * (1.0 + Math.random() * 0.7), 0);
+        ctx.lineTo(-ship.r * 0.5, -ship.r * 0.34);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawBullets() {
+      ctx.fillStyle = HOT;
+      ctx.shadowColor = GREEN;
+      ctx.shadowBlur = 6;
+      for (const b of bullets) { ctx.beginPath(); ctx.arc(b.x, b.y, 1.8, 0, 7); ctx.fill(); }
+      ctx.shadowBlur = 0;
+    }
+
+    function loop() {
+      ctx.clearRect(0, 0, W, H);
+      if (started) update();
+      drawBullets();
+      drawShip();
+      requestAnimationFrame(loop);
+    }
+
+    function init() { resize(); reset(); loop(); }
+    window.addEventListener('resize', () => {
+      const ox = W ? ship.x / W : 0.5, oy = H ? ship.y / H : 0.5;
+      resize(); ship.x = ox * W; ship.y = oy * H;
+    });
+    if (document.readyState !== 'loading') init();
+    else window.addEventListener('DOMContentLoaded', init);
+  })();
+  </script>
 </body>
 </html>
