@@ -442,7 +442,7 @@
 
     // --- asteroids + game state ---
     const AST_R = { 3: 26, 2: 16, 1: 9 }, AST_SPD = { 3: 0.5, 2: 0.85, 1: 1.25 },
-          AST_SCORE = { 3: 20, 2: 30, 1: 50 }, MAX_AST = 16;
+          AST_SCORE = { 3: 25, 2: 15, 1: 10 }, MAX_AST = 44;
     const asteroids = [];
     let score = 0, integrity = 3, invuln = 0, hitFlash = 0, gameOver = false;
 
@@ -461,7 +461,34 @@
       const sp = AST_SPD[size] * (0.7 + Math.random() * 0.8);
       return { x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, r, verts, ang: Math.random() * 7, spin: (Math.random() - 0.5) * 0.05, size };
     }
-    function spawnAsteroid() { if (asteroids.length < MAX_AST) asteroids.push(makeAsteroid(3)); }
+    function spawnAsteroid(size) { if (asteroids.length < MAX_AST) asteroids.push(makeAsteroid(size || 1)); }
+
+    // difficulty mapped to the track (barNum is 0-indexed; cad 0 none, 1 downbeat, 2 half-bar, 4 every beat)
+    function diffAt(bar) {
+      if (bar <= 4)   return { cad: 0 };            // intro: get ready, no rocks
+      if (bar <= 32)  return { cad: 1, size: 1 };   // beginner: one single-shot rock per bar
+      if (bar <= 56)  return { cad: 1, size: 2 };   // intermediate: splitters, one per bar
+      if (bar <= 64)  return { cad: 4, size: 1 };   // pickup: single-shot every beat
+      if (bar <= 68)  return { cad: 0 };            // break
+      if (bar <= 84)  return { cad: 1, size: 2 };   // continuation: intermediate
+      if (bar <= 88)  return { cad: 0 };            // break
+      if (bar <= 96)  return { cad: 2, size: 2 };   // intermediate+
+      if (bar <= 100) return { cad: 0, warn: 1 };   // danger ahead
+      if (bar <= 108) return { cad: 2, size: 2 };
+      if (bar <= 116) return { cad: 4, size: 1 };
+      if (bar <= 124) return { cad: 2, size: 3 };
+      if (bar <= 132) return { cad: 4, size: 2 };
+      if (bar <= 152) return { cad: 4, size: 3 };   // impossible
+      return { cad: 4, size: 3, flood: 1 };         // certain death
+    }
+    function onBeat() {
+      const d = diffAt(barNum);
+      if (!d.cad) return;
+      const go = d.cad === 4 ? true : d.cad === 2 ? (beatInBar % 2 === 0) : (beatInBar === 0);
+      if (!go) return;
+      spawnAsteroid(d.size);
+      if (d.flood) { spawnAsteroid(d.size); if (Math.random() < 0.6) spawnAsteroid(2); }
+    }
     function splitAsteroid(i) {
       const a = asteroids[i]; asteroids.splice(i, 1);
       if (a.size > 1) for (let k = 0; k < 2; k++) asteroids.push(makeAsteroid(a.size - 1, a.x, a.y, true));
@@ -470,6 +497,9 @@
       asteroids.length = 0; bullets.length = 0; score = 0; integrity = 3;
       invuln = 80; hitFlash = 0; gameOver = false; reset();
       overEl.classList.add('hidden');
+      // restart the track and beat clock so each run begins from the intro
+      lastBeat = -1; lastPos = 0; clockStart = performance.now();
+      try { audio.currentTime = 0; if (!muted) audio.play(); } catch (e) {}
     }
 
     // --- audio + 135 BPM beat grid ---
@@ -493,10 +523,7 @@
         beatInBar = ((idx % 4) + 4) % 4;
         barNum = Math.floor(idx / 4);
         if (readoutEl) readoutEl.textContent = 'BAR ' + String(barNum + 1).padStart(3, '0');
-        if (!gameOver) {
-          if (beatInBar === 0) spawnAsteroid();
-          else if (beatInBar === 2 && barNum > 3) spawnAsteroid();
-        }
+        if (!gameOver) onBeat();
       }
       if (beatFlash > 0) beatFlash = Math.max(0, beatFlash - 0.06);
     }
@@ -561,13 +588,25 @@
       ship.vx *= FRICTION; ship.vy *= FRICTION;
       const sp = Math.hypot(ship.vx, ship.vy);
       if (sp > MAXSPD) { ship.vx *= MAXSPD / sp; ship.vy *= MAXSPD / sp; }
-      ship.x += ship.vx; ship.y += ship.vy; wrap(ship);
+      ship.x += ship.vx; ship.y += ship.vy;
+      // confine the ship to the screen (no wrap)
+      if (ship.x < ship.r) { ship.x = ship.r; if (ship.vx < 0) ship.vx = 0; }
+      else if (ship.x > W - ship.r) { ship.x = W - ship.r; if (ship.vx > 0) ship.vx = 0; }
+      if (ship.y < ship.r) { ship.y = ship.r; if (ship.vy < 0) ship.vy = 0; }
+      else if (ship.y > H - ship.r) { ship.y = H - ship.r; if (ship.vy > 0) ship.vy = 0; }
+      // bullets die at the edge (no wrap)
       for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
-        b.x += b.vx; b.y += b.vy; b.life--; wrap(b);
-        if (b.life <= 0) bullets.splice(i, 1);
+        b.x += b.vx; b.y += b.vy; b.life--;
+        if (b.life <= 0 || b.x < 0 || b.x > W || b.y < 0 || b.y > H) bullets.splice(i, 1);
       }
-      for (const a of asteroids) { a.x += a.vx; a.y += a.vy; a.ang += a.spin; wrap(a); }
+      // asteroids leave and are gone (no wrap)
+      for (let i = asteroids.length - 1; i >= 0; i--) {
+        const a = asteroids[i];
+        a.x += a.vx; a.y += a.vy; a.ang += a.spin;
+        const m = a.r * 2;
+        if (a.x < -m || a.x > W + m || a.y < -m || a.y > H + m) asteroids.splice(i, 1);
+      }
       // bullet vs asteroid
       for (let i = asteroids.length - 1; i >= 0; i--) {
         const a = asteroids[i]; let hit = false;
@@ -649,6 +688,32 @@
       ctx.shadowBlur = 0;
     }
 
+    function drawOverlays() {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (!gameOver && barNum <= 4) {
+        ctx.shadowColor = GREEN; ctx.shadowBlur = 10;
+        ctx.fillStyle = HOT; ctx.font = '700 22px "Courier New", monospace';
+        ctx.fillText('GET READY', W / 2, H / 2 - 8);
+        ctx.shadowBlur = 0; ctx.fillStyle = GREEN; ctx.font = '10px "Courier New", monospace';
+        ctx.fillText('HOLD POSITION', W / 2, H / 2 + 16);
+      }
+      if (!gameOver && barNum >= 97 && barNum <= 100 && Math.floor(performance.now() / 220) % 2) {
+        ctx.shadowColor = RED; ctx.shadowBlur = 12;
+        ctx.fillStyle = RED; ctx.font = '700 20px "Courier New", monospace';
+        ctx.fillText('DANGER AHEAD', W / 2, H / 2);
+        ctx.shadowBlur = 0;
+      }
+      if (barNum >= 133) {
+        const t = Math.min(1, (barNum - 133) / 24);
+        const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.8);
+        g.addColorStop(0, 'rgba(255,70,155,' + (0.10 + 0.4 * t) + ')');
+        g.addColorStop(0.55, 'rgba(120,40,200,' + (0.05 + 0.25 * t) + ')');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      }
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+
     function loop() {
       ctx.clearRect(0, 0, W, H);
       if (started) { beatUpdate(); if (!gameOver) update(); }
@@ -656,6 +721,7 @@
       drawBullets();
       drawShip();
       if (started) drawBeat();
+      if (started) drawOverlays();
       if (hitFlash > 0) { ctx.fillStyle = RED; ctx.globalAlpha = hitFlash * 0.35; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
       requestAnimationFrame(loop);
     }
