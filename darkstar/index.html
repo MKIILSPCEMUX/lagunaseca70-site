@@ -368,14 +368,14 @@
           <div class="hud"></div>
 
           <div class="telemetry left">
-            <div class="tbox hot">MAX</div>
+            <div class="tbox hot">HULL<br /><span id="tHull">3</span></div>
             <div class="tbox">&beta;<br />6.7</div>
             <div class="tbox">&Omega;<br />1.12</div>
           </div>
           <div class="telemetry right">
             <div class="tbox">&Theta;<br /><span id="tHead">0</span></div>
             <div class="tbox">&Delta;<br />8.4</div>
-            <div class="tbox hot">&Sigma; 7</div>
+            <div class="tbox hot">&Sigma;<br /><span id="tScore">0</span></div>
           </div>
 
           <canvas id="game" class="game-canvas"></canvas>
@@ -383,6 +383,10 @@
             <div class="sh-title">READY</div>
             <div class="sh-sub">ARROWS FLY &middot; SPACE FIRE &middot; M MUTE</div>
             <div class="sh-note">Sound on &middot; keyboard for now &middot; touch to come</div>
+          </div>
+          <div class="start-hint hidden" id="gameOver">
+            <div class="sh-title" style="color: var(--crt-red); text-shadow: 0 0 10px rgba(229,72,42,0.7)">HULL BREACH</div>
+            <div class="sh-sub">SPACE TO RETRY</div>
           </div>
 
           <div class="readout">NO.5</div>
@@ -409,9 +413,12 @@
     const cv = document.getElementById('game');
     const ctx = cv.getContext('2d');
     const hint = document.getElementById('startHint');
+    const overEl = document.getElementById('gameOver');
     const headEl = document.getElementById('tHead');
+    const scoreEl = document.getElementById('tScore');
+    const hullEl = document.getElementById('tHull');
     const readoutEl = document.querySelector('.readout');
-    const GREEN = '#48d86b', HOT = '#eaffef', DIM = '#235a2c';
+    const GREEN = '#48d86b', HOT = '#eaffef', RED = '#e5482a', DIM = '#235a2c';
     const DPR = Math.min(window.devicePixelRatio || 1, 2);
     let W = 0, H = 0;
 
@@ -432,6 +439,38 @@
 
     const THRUST = 0.16, FRICTION = 0.99, MAXSPD = 4.4, ROT = 0.078,
           BULLET_SPD = 6, FIRE_MS = 170, BULLET_LIFE = 68;
+
+    // --- asteroids + game state ---
+    const AST_R = { 3: 26, 2: 16, 1: 9 }, AST_SPD = { 3: 0.5, 2: 0.85, 1: 1.25 },
+          AST_SCORE = { 3: 20, 2: 30, 1: 50 }, MAX_AST = 16;
+    const asteroids = [];
+    let score = 0, integrity = 3, invuln = 0, hitFlash = 0, gameOver = false;
+
+    function makeAsteroid(size, x, y, fragment) {
+      const r = AST_R[size], verts = [], n = 8 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2, rr = r * (0.7 + Math.random() * 0.5); verts.push([Math.cos(a) * rr, Math.sin(a) * rr]); }
+      if (x === undefined) {
+        const e = Math.floor(Math.random() * 4);
+        if (e === 0) { x = Math.random() * W; y = -r; }
+        else if (e === 1) { x = Math.random() * W; y = H + r; }
+        else if (e === 2) { x = -r; y = Math.random() * H; }
+        else { x = W + r; y = Math.random() * H; }
+      }
+      const ang = fragment ? Math.random() * Math.PI * 2
+                           : Math.atan2(H / 2 - y, W / 2 - x) + (Math.random() - 0.5) * 1.1;
+      const sp = AST_SPD[size] * (0.7 + Math.random() * 0.8);
+      return { x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, r, verts, ang: Math.random() * 7, spin: (Math.random() - 0.5) * 0.05, size };
+    }
+    function spawnAsteroid() { if (asteroids.length < MAX_AST) asteroids.push(makeAsteroid(3)); }
+    function splitAsteroid(i) {
+      const a = asteroids[i]; asteroids.splice(i, 1);
+      if (a.size > 1) for (let k = 0; k < 2; k++) asteroids.push(makeAsteroid(a.size - 1, a.x, a.y, true));
+    }
+    function resetGame() {
+      asteroids.length = 0; bullets.length = 0; score = 0; integrity = 3;
+      invuln = 80; hitFlash = 0; gameOver = false; reset();
+      overEl.classList.add('hidden');
+    }
 
     // --- audio + 135 BPM beat grid ---
     const BPM = 135, BEAT = 60 / BPM, OFFSET = 0.0;
@@ -454,6 +493,10 @@
         beatInBar = ((idx % 4) + 4) % 4;
         barNum = Math.floor(idx / 4);
         if (readoutEl) readoutEl.textContent = 'BAR ' + String(barNum + 1).padStart(3, '0');
+        if (!gameOver) {
+          if (beatInBar === 0) spawnAsteroid();
+          else if (beatInBar === 2 && barNum > 3) spawnAsteroid();
+        }
       }
       if (beatFlash > 0) beatFlash = Math.max(0, beatFlash - 0.06);
     }
@@ -499,7 +542,7 @@
     window.addEventListener('keydown', e => {
       if (CONTROL.includes(e.key)) { e.preventDefault(); start(); }
       keys[e.key] = true;
-      if (e.key === ' ' || e.key === 'Spacebar') shoot();
+      if (e.key === ' ' || e.key === 'Spacebar') { if (gameOver) resetGame(); else shoot(); }
       if (e.key === 'm' || e.key === 'M') toggleMute();
     });
     window.addEventListener('keyup', e => { keys[e.key] = false; });
@@ -524,11 +567,37 @@
         b.x += b.vx; b.y += b.vy; b.life--; wrap(b);
         if (b.life <= 0) bullets.splice(i, 1);
       }
+      for (const a of asteroids) { a.x += a.vx; a.y += a.vy; a.ang += a.spin; wrap(a); }
+      // bullet vs asteroid
+      for (let i = asteroids.length - 1; i >= 0; i--) {
+        const a = asteroids[i]; let hit = false;
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          const b = bullets[j];
+          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; hit = true; break; }
+        }
+        if (hit) splitAsteroid(i);
+      }
+      // ship vs asteroid
+      if (invuln <= 0) {
+        for (const a of asteroids) {
+          if ((a.x - ship.x) ** 2 + (a.y - ship.y) ** 2 < (a.r + ship.r * 0.7) ** 2) {
+            integrity--; invuln = 95; hitFlash = 1;
+            const ka = Math.atan2(ship.y - a.y, ship.x - a.x);
+            ship.vx += Math.cos(ka) * 3; ship.vy += Math.sin(ka) * 3;
+            if (integrity <= 0) { gameOver = true; overEl.classList.remove('hidden'); }
+            break;
+          }
+        }
+      }
+      if (invuln > 0) invuln--;
+      if (hitFlash > 0) hitFlash = Math.max(0, hitFlash - 0.05);
       if (headEl) headEl.textContent = ((Math.round(ship.a * 180 / Math.PI) + 90) % 360 + 360) % 360;
-      beatUpdate();
+      if (scoreEl) scoreEl.textContent = score;
+      if (hullEl) hullEl.textContent = Math.max(0, integrity);
     }
 
     function drawShip() {
+      if (invuln > 0 && !gameOver && Math.floor(invuln / 5) % 2 === 0) return; // blink while shielded
       ctx.save();
       ctx.translate(ship.x, ship.y);
       ctx.rotate(ship.a);
@@ -544,7 +613,7 @@
       ctx.lineTo(-ship.r * 0.8, -ship.r * 0.72);
       ctx.closePath();
       ctx.stroke();
-      if (thrusting) {
+      if (thrusting && !gameOver) {
         ctx.strokeStyle = GREEN;
         ctx.beginPath();
         ctx.moveTo(-ship.r * 0.5, ship.r * 0.34);
@@ -564,12 +633,30 @@
       ctx.shadowBlur = 0;
     }
 
+    function drawAsteroids() {
+      ctx.strokeStyle = GREEN;
+      ctx.lineWidth = 1.4;
+      ctx.lineJoin = 'round';
+      ctx.shadowColor = GREEN;
+      ctx.shadowBlur = 4;
+      for (const a of asteroids) {
+        ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.ang);
+        ctx.beginPath();
+        a.verts.forEach((v, k) => k ? ctx.lineTo(v[0], v[1]) : ctx.moveTo(v[0], v[1]));
+        ctx.closePath(); ctx.stroke();
+        ctx.restore();
+      }
+      ctx.shadowBlur = 0;
+    }
+
     function loop() {
       ctx.clearRect(0, 0, W, H);
-      if (started) update();
-      if (started) drawBeat();
+      if (started) { beatUpdate(); if (!gameOver) update(); }
+      drawAsteroids();
       drawBullets();
       drawShip();
+      if (started) drawBeat();
+      if (hitFlash > 0) { ctx.fillStyle = RED; ctx.globalAlpha = hitFlash * 0.35; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
       requestAnimationFrame(loop);
     }
 
