@@ -71,6 +71,7 @@
     .wrap {
       width: 100%;
       max-width: 430px;
+      margin: auto;
       padding: 18px 10px 26px;
       display: flex;
       justify-content: center;
@@ -116,30 +117,23 @@
     /* Hull stencil header */
     .hull-head {
       display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 2px 6px 12px;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 4px 6px 12px;
     }
-    .stencil {
-      font-weight: 800;
-      font-size: clamp(30px, 10.5vw, 44px);
-      line-height: 0.9;
-      letter-spacing: -0.01em;
-      color: var(--ink);
-      text-transform: uppercase;
-      transform: scaleY(1.18);
-      transform-origin: left bottom;
+    .logo {
+      width: 66%;
+      max-width: 250px;
+      height: auto;
+      display: block;
     }
-    .registry {
-      text-align: right;
-      font-size: 8.5px;
-      line-height: 1.5;
-      letter-spacing: 0.14em;
-      color: var(--grey-dk);
+    .hull-caption {
+      margin-top: 9px;
+      font-size: 9px;
+      letter-spacing: 0.22em;
       text-transform: uppercase;
       font-weight: 700;
-      white-space: nowrap;
+      color: var(--grey-dk);
     }
 
     /* SCREEN BEZEL (grey panel holding the CRT) */
@@ -331,8 +325,8 @@
       <span class="screw bl"></span><span class="screw br"></span>
 
       <div class="hull-head">
-        <div class="stencil">Dark<br />Star</div>
-        <div class="registry">ADC 1138&ndash;2021<br />A mini game by<br />Laguna Seca</div>
+        <img class="logo" src="img/darkstar_logo.svg" alt="Dark Star" />
+        <div class="hull-caption">A mini game by Laguna Seca</div>
       </div>
 
       <div class="bezel">
