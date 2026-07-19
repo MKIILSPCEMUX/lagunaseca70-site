@@ -9,36 +9,44 @@
   <!-- Open Graph / social preview -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="The Dark Star" />
-  <meta property="og:description" content="A rhythm-synced arcade game by Laguna Seca, in build. 135 BPM, CRT vectors, NASA skies." />
+  <meta property="og:description" content="A rhythm-synced arcade game by Laguna Seca, in build. 135 BPM, green-CRT scanner, NASA skies." />
   <meta property="og:url" content="https://lagunaseca70.com/darkstar/" />
   <meta property="og:image" content="https://lagunaseca70.com/darkstar/img/darkstar_flare_b.jpg" />
 
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="The Dark Star" />
-  <meta name="twitter:description" content="A rhythm-synced arcade game by Laguna Seca, in build. 135 BPM, CRT vectors, NASA skies." />
+  <meta name="twitter:description" content="A rhythm-synced arcade game by Laguna Seca, in build. 135 BPM, green-CRT scanner, NASA skies." />
   <meta name="twitter:image" content="https://lagunaseca70.com/darkstar/img/darkstar_flare_b.jpg" />
 
   <style>
     :root {
-      --space-black: #05070c;
-      --cabinet-top: #141a2b;
-      --cabinet-bottom: #05060a;
-      --crt-green: #5cffb0;
-      --crt-green-dim: rgba(92, 255, 176, 0.55);
-      --crt-cyan: #4fe9ff;
-      --hot-pink: #ff3d80;
-      --amber: #ffcf6b;
-      --text-dim: rgba(200, 255, 230, 0.72);
+      /* Outside the glass: the ship hull + cockpit */
+      --hull:      #e5e3dd;
+      --hull-hi:   #f3f2ed;
+      --hull-lo:   #cbc9c1;
+      --grey:      #a5a19c;
+      --grey-dk:   #615d59;
+      --ink:       #12100e;
+      --amber:     #e8912e;
+      --red:       #d8352a;
+      --teal:      #37a29a;
+
+      /* Inside the glass: the green scanner */
+      --crt-base:  #07150a;
+      --crt-base2: #0b2011;
+      --crt-green: #48d86b;
+      --crt-dim:   #235a2c;
+      --crt-hot:   #eaffef;
+      --crt-red:   #e5482a;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     html, body { height: 100%; width: 100%; }
 
     body {
-      font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, monospace;
-      background: var(--space-black);
-      color: #fff;
+      font-family: "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+      background: #05070c;
+      color: var(--ink);
       display: flex;
       justify-content: center;
       align-items: flex-start;
@@ -46,7 +54,7 @@
       overflow-x: hidden;
     }
 
-    /* NASA flare backdrop, echoing the Laguna Sneca layout */
+    /* NASA flare world, outside the ship */
     .background {
       position: fixed;
       inset: 0;
@@ -57,244 +65,316 @@
       content: "";
       position: absolute;
       inset: 0;
-      background:
-        radial-gradient(circle at 50% 30%, rgba(5, 7, 12, 0.25), rgba(5, 7, 12, 0.82) 75%);
-      z-index: -1;
+      background: radial-gradient(circle at 50% 32%, rgba(5,7,12,0.15), rgba(5,7,12,0.78) 78%);
     }
 
-    .cabinet-wrapper {
+    .wrap {
       width: 100%;
       max-width: 430px;
-      padding: 16px 8px 24px;
+      padding: 18px 10px 26px;
       display: flex;
       justify-content: center;
     }
 
+    /* THE HULL */
     .cabinet {
-      width: 100%;
-      background: linear-gradient(180deg, var(--cabinet-top) 0%, var(--cabinet-bottom) 100%);
-      border-radius: 28px;
-      box-shadow:
-        0 20px 46px rgba(0, 0, 0, 0.7),
-        0 0 0 1px rgba(92, 255, 176, 0.14),
-        inset 0 0 60px rgba(0, 0, 0, 0.6);
-      padding: 26px 20px 14px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    /* Wordmark */
-    .logo { text-align: center; margin-bottom: 4px; }
-    .logo-kicker {
-      display: block;
-      font-size: 13px;
-      letter-spacing: 0.62em;
-      text-indent: 0.62em;
-      color: var(--amber);
-      margin-bottom: 4px;
-    }
-    .logo-main {
-      display: block;
-      font-weight: 700;
-      font-size: clamp(38px, 13vw, 54px);
-      letter-spacing: 0.06em;
-      color: var(--crt-green);
-      text-shadow:
-        0 0 6px var(--crt-green-dim),
-        0 0 18px rgba(92, 255, 176, 0.35),
-        0 0 40px rgba(92, 255, 176, 0.18);
-    }
-    .subtitle {
-      font-size: 10px;
-      letter-spacing: 0.28em;
-      text-transform: uppercase;
-      text-align: center;
-      color: var(--text-dim);
-      margin: 10px 0 18px;
-    }
-
-    /* CRT screen */
-    .screen-shell {
-      width: 100%;
-      background: linear-gradient(135deg, #0a1018, #04070c);
-      border-radius: 16px;
-      padding: 10px;
-      box-shadow: inset 0 0 0 1px rgba(92, 255, 176, 0.10);
-      margin-bottom: 16px;
-    }
-    .screen {
       position: relative;
       width: 100%;
-      aspect-ratio: 9 / 16;
-      max-height: calc(100vh - 300px);
       background:
-        radial-gradient(circle at 50% 42%, rgba(92, 255, 176, 0.05), rgba(0, 0, 0, 0) 60%),
-        #01040a;
-      border: 2px solid #000;
+        linear-gradient(178deg, var(--hull-hi) 0%, var(--hull) 42%, var(--hull-lo) 100%);
+      border-radius: 20px 20px 26px 26px;
+      padding: 20px 18px 16px;
+      box-shadow:
+        0 22px 50px rgba(0,0,0,0.72),
+        inset 0 1px 0 rgba(255,255,255,0.8),
+        inset 0 -3px 8px rgba(97,93,89,0.35);
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+    /* panel seam down each side + corner screws */
+    .cabinet::before {
+      content: "";
+      position: absolute;
+      inset: 8px 8px 10px 8px;
+      border-radius: 14px;
+      border: 1px solid rgba(97,93,89,0.28);
+      pointer-events: none;
+    }
+    .screw {
+      position: absolute;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #fff, var(--grey) 60%, var(--grey-dk));
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
+    }
+    .screw.tl { top: 14px; left: 14px; }
+    .screw.tr { top: 14px; right: 14px; }
+    .screw.bl { bottom: 16px; left: 14px; }
+    .screw.br { bottom: 16px; right: 14px; }
+
+    /* Hull stencil header */
+    .hull-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 2px 6px 12px;
+    }
+    .stencil {
+      font-weight: 800;
+      font-size: clamp(30px, 10.5vw, 44px);
+      line-height: 0.9;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      text-transform: uppercase;
+      transform: scaleY(1.18);
+      transform-origin: left bottom;
+    }
+    .registry {
+      text-align: right;
+      font-size: 8.5px;
+      line-height: 1.5;
+      letter-spacing: 0.14em;
+      color: var(--grey-dk);
+      text-transform: uppercase;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    /* SCREEN BEZEL (grey panel holding the CRT) */
+    .bezel {
+      background: linear-gradient(160deg, #33312e, #171614);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow:
+        inset 0 2px 6px rgba(0,0,0,0.7),
+        inset 0 0 0 1px rgba(255,255,255,0.05);
+    }
+
+    /* THE GREEN SCANNER */
+    .scanner {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 10 / 15;
+      max-height: calc(100vh - 320px);
+      background:
+        radial-gradient(circle at 50% 42%, rgba(72,216,107,0.10), rgba(0,0,0,0) 62%),
+        linear-gradient(180deg, var(--crt-base2), var(--crt-base));
       border-radius: 8px;
       overflow: hidden;
+      color: var(--crt-green);
+    }
+    /* scanlines + phosphor grid + vignette */
+    .scanner::before {
+      content: "";
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(72,216,107,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(72,216,107,0.05) 1px, transparent 1px);
+      background-size: 26px 26px;
+    }
+    .scanner::after {
+      content: "";
+      position: absolute; inset: 0;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.30) 0px, rgba(0,0,0,0.30) 1px, transparent 2px, transparent 4px),
+        radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.6) 100%);
+      z-index: 5;
+    }
+
+    /* HUD frame drawn on the screen, in green */
+    .hud {
+      position: absolute;
+      inset: 12px 10px 40px;
+      border: 1.5px solid var(--crt-dim);
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+      z-index: 3;
+    }
+    .telemetry {
+      position: absolute;
+      top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 4;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .telemetry.left { left: 12px; align-items: flex-start; }
+    .telemetry.right { right: 12px; align-items: flex-end; }
+    .tbox {
+      min-width: 34px;
+      padding: 4px 7px;
+      background: var(--crt-dim);
+      color: #05170b;
+      border-radius: 2px;
+      text-align: center;
+      line-height: 1.15;
+    }
+    .tbox.hot { background: var(--crt-green); }
+
+    /* centre content */
+    .screen-mid {
+      position: absolute;
+      inset: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       gap: 22px;
-    }
-    /* faint vector grid */
-    .screen::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(92, 255, 176, 0.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(92, 255, 176, 0.06) 1px, transparent 1px);
-      background-size: 30px 30px;
-      z-index: 1;
-    }
-    /* scanlines + vignette */
-    .screen::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background:
-        repeating-linear-gradient(0deg, rgba(0,0,0,0.24) 0px, rgba(0,0,0,0.24) 1px, transparent 2px, transparent 3px),
-        radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%);
-      z-index: 3;
-    }
-
-    .screen-content {
-      position: relative;
-      z-index: 2;
+      z-index: 4;
       text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
     }
-    .prototype-title {
+    .proto {
       font-size: 15px;
-      letter-spacing: 0.42em;
-      text-indent: 0.42em;
+      font-weight: 800;
+      letter-spacing: 0.4em;
+      text-indent: 0.4em;
+      color: var(--crt-hot);
+      text-shadow: 0 0 10px rgba(72,216,107,0.7);
+    }
+    .proto-sub {
+      font-size: 9.5px;
+      letter-spacing: 0.26em;
       color: var(--crt-green);
-      text-shadow: 0 0 10px var(--crt-green-dim);
+      opacity: 0.8;
     }
-    .prototype-sub {
-      font-size: 10px;
-      letter-spacing: 0.28em;
-      color: var(--text-dim);
-    }
-
-    /* 135 BPM beat indicator */
-    .beat {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-    }
+    .beat { display: flex; flex-direction: column; align-items: center; gap: 9px; }
     .beat-dot {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: var(--hot-pink);
-      box-shadow: 0 0 12px var(--hot-pink);
-      animation: pulse 0.4444s steps(1, end) infinite;
+      width: 15px; height: 15px; border-radius: 50%;
+      background: var(--crt-hot);
+      box-shadow: 0 0 12px var(--crt-green);
+      animation: pulse 0.4444s steps(1,end) infinite;
     }
     @keyframes pulse {
-      0%   { transform: scale(1.25); opacity: 1; }
-      40%  { transform: scale(0.85); opacity: 0.45; }
-      100% { transform: scale(0.85); opacity: 0.45; }
+      0%   { transform: scale(1.3); opacity: 1; }
+      40%  { transform: scale(0.8); opacity: 0.35; }
+      100% { transform: scale(0.8); opacity: 0.35; }
     }
-    .beat-label {
-      font-size: 10px;
-      letter-spacing: 0.34em;
-      text-indent: 0.34em;
-      color: var(--amber);
+    .beat-label { font-size: 9.5px; letter-spacing: 0.32em; text-indent: 0.32em; color: var(--crt-green); }
+
+    /* red readout strip, film-style */
+    .readout {
+      position: absolute;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      z-index: 4;
+      background: var(--crt-red);
+      color: #200;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.24em;
+      text-indent: 0.24em;
+      padding: 3px 14px;
+      border-radius: 2px;
     }
 
-    /* Buttons */
-    .buttons-row {
+    /* COCKPIT SWITCHES (buttons) */
+    .switches {
       display: flex;
-      justify-content: center;
-      gap: 14px;
-      width: 100%;
-      margin-bottom: 12px;
+      gap: 12px;
+      margin: 14px 4px 6px;
     }
-    .btn {
+    .switch {
       flex: 1;
-      max-width: 170px;
-      padding: 11px 12px;
-      border-radius: 24px;
-      border: 1px solid rgba(92, 255, 176, 0.4);
-      background: rgba(92, 255, 176, 0.06);
-      cursor: pointer;
-      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 10px;
+      border-radius: 6px;
+      background: linear-gradient(180deg, #fbfaf7, var(--hull-lo));
+      border: 1px solid var(--grey-dk);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 2px 3px rgba(0,0,0,0.25);
+      text-decoration: none;
+      color: var(--ink);
       font-size: 11px;
-      letter-spacing: 0.18em;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      transition: transform 110ms ease, box-shadow 110ms ease;
+    }
+    .switch:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(0,0,0,0.3) inset; }
+    .led { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 7px currentColor; }
+    .led.amber { background: var(--amber); color: var(--amber); }
+    .led.teal  { background: var(--teal);  color: var(--teal); }
+
+    .hull-foot {
+      text-align: center;
+      font-size: 8.5px;
+      line-height: 1.7;
+      letter-spacing: 0.08em;
+      color: var(--grey-dk);
       text-transform: uppercase;
       font-weight: 700;
-      color: var(--crt-green);
-      text-decoration: none;
-      text-align: center;
-      transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+      padding: 6px 4px 2px;
     }
-    .btn:hover {
-      transform: translateY(-1px);
-      background: rgba(92, 255, 176, 0.14);
-      box-shadow: 0 0 16px rgba(92, 255, 176, 0.25);
-    }
-    .btn:active { transform: translateY(1px); }
-
-    .footer {
-      text-align: center;
-      font-size: 9px;
-      line-height: 1.6;
-      color: var(--text-dim);
-      letter-spacing: 0.04em;
-    }
-    .footer a { color: var(--crt-cyan); text-decoration: none; }
-    .footer a:hover { text-decoration: underline; }
+    .hull-foot a { color: var(--grey-dk); }
 
     @media (max-width: 480px) {
-      .cabinet-wrapper { padding: 8px 4px 16px; }
-      .cabinet { padding: 22px 14px 12px; border-radius: 24px; }
+      .wrap { padding: 10px 6px 18px; }
+      .cabinet { padding: 16px 13px 12px; }
     }
   </style>
 </head>
 <body>
   <div class="background"></div>
 
-  <div class="cabinet-wrapper">
+  <div class="wrap">
     <div class="cabinet">
-      <div class="logo">
-        <span class="logo-kicker">THE</span>
-        <span class="logo-main">DARK STAR</span>
-      </div>
-      <div class="subtitle">A mini game by Laguna Seca</div>
+      <span class="screw tl"></span><span class="screw tr"></span>
+      <span class="screw bl"></span><span class="screw br"></span>
 
-      <div class="screen-shell">
-        <div class="screen">
-          <div class="screen-content">
-            <div class="prototype-title">PROTOTYPE</div>
-            <div class="prototype-sub">CABINET SHELL &middot; BUILD IN PROGRESS</div>
+      <div class="hull-head">
+        <div class="stencil">Dark<br />Star</div>
+        <div class="registry">ADC 1138&ndash;2021<br />A mini game by<br />Laguna Seca</div>
+      </div>
+
+      <div class="bezel">
+        <div class="scanner">
+          <div class="hud"></div>
+
+          <div class="telemetry left">
+            <div class="tbox hot">MAX</div>
+            <div class="tbox">&beta;<br />6.7</div>
+            <div class="tbox">&Omega;<br />1.12</div>
+          </div>
+          <div class="telemetry right">
+            <div class="tbox">&Theta;<br />3</div>
+            <div class="tbox">&Delta;<br />8.4</div>
+            <div class="tbox hot">&Sigma; 7</div>
+          </div>
+
+          <div class="screen-mid">
+            <div class="proto">PROTOTYPE</div>
+            <div class="proto-sub">CABINET SHELL &middot; BUILD IN PROGRESS</div>
             <div class="beat">
               <div class="beat-dot"></div>
               <div class="beat-label">135 BPM</div>
             </div>
           </div>
+
+          <div class="readout">NO.5</div>
         </div>
       </div>
 
-      <div class="buttons-row">
-        <a class="btn" href="https://lagunaseca.bandcamp.com" target="_blank" rel="noopener noreferrer">Bandcamp</a>
-        <a class="btn" href="https://lagunaseca70.com/" target="_blank" rel="noopener noreferrer">Laguna Sneca</a>
+      <div class="switches">
+        <a class="switch" href="https://lagunaseca.bandcamp.com/track/laguna-sneca" target="_blank" rel="noopener noreferrer">
+          <span class="led amber"></span>Bandcamp
+        </a>
+        <a class="switch" href="https://lagunaseca70.com/" target="_blank" rel="noopener noreferrer">
+          <span class="led teal"></span>Laguna Sneca
+        </a>
       </div>
 
-      <div class="footer">
-        The Dark Star &middot; a rhythm-synced arcade game, in build.<br />
-        Music and design by Laguna Seca.
-        &nbsp;|&nbsp;
-        <a href="mailto:contact@lagunaseca70.com">contact@lagunaseca70.com</a>
+      <div class="hull-foot">
+        The Dark Star &middot; a rhythm-synced arcade game, in build<br />
+        Music and design by Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact@lagunaseca70.com</a>
       </div>
     </div>
   </div>
