@@ -446,6 +446,23 @@
     const asteroids = [];
     const laser = { on: false, x0: 0, y0: 0, dx: 0, dy: 0, len: 0 };
     let score = 0, integrity = 3, invuln = 0, hitFlash = 0, gameOver = false;
+    let laserHeat = 0, overheated = false, lastEighth = -1;
+    const HEAT_RISE = 0.011, HEAT_FALL = 0.006;
+
+    // --- sound effects: files under audio/sfx/ (Mike supplies them; missing files fail silently) ---
+    const SFX = {};
+    const laserSnd = new Audio('audio/sfx/laser_loop.mp3'); laserSnd.loop = true; laserSnd.preload = 'auto';
+    function sfx(name, vol) {
+      if (muted) return;
+      try { const base = SFX[name] || (SFX[name] = new Audio('audio/sfx/' + name + '.mp3')); const n = base.cloneNode(); n.volume = vol || 1; n.play().catch(() => {}); } catch (e) {}
+    }
+    function laserSound(on) {
+      if (muted || !on) { if (!laserSnd.paused) laserSnd.pause(); return; }
+      if (laserSnd.paused) laserSnd.play().catch(() => {});
+    }
+    function hexRgb(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+    function lerpColor(a, b, t) { const A = hexRgb(a), B = hexRgb(b); return 'rgb(' + Math.round(A[0] + (B[0] - A[0]) * t) + ',' + Math.round(A[1] + (B[1] - A[1]) * t) + ',' + Math.round(A[2] + (B[2] - A[2]) * t) + ')'; }
+    function astColor() { const t = Math.max(0, Math.min(1, (barNum + 1 - 97) / 43)); return t <= 0 ? GREEN : lerpColor(GREEN, NEONPINK, t); }
 
     function makeAsteroid(size, x, y, fragment) {
       const r = AST_R[size], verts = [], n = 8 + Math.floor(Math.random() * 4);
@@ -497,6 +514,7 @@
     function resetGame() {
       asteroids.length = 0; bullets.length = 0; score = 0; integrity = 3;
       invuln = 80; hitFlash = 0; gameOver = false; reset();
+      laserHeat = 0; overheated = false; lastEighth = -1; laserSnd.pause();
       overEl.classList.add('hidden');
       // restart the track and beat clock so each run begins from the intro
       lastBeat = -1; lastPos = 0; clockStart = performance.now();
@@ -524,6 +542,12 @@
         beatInBar = ((idx % 4) + 4) % 4;
         barNum = Math.floor(idx / 4);
         if (readoutEl) readoutEl.textContent = 'BAR ' + String(barNum + 1).padStart(3, '0');
+        if (beatInBar === 0 && !gameOver) {
+          const rb = barNum + 1;
+          if (rb === 65 || rb === 85) sfx('stage_clear');
+          else if (rb === 97) sfx('danger');
+          else if (rb === 101) sfx('laser_equipped');
+        }
         if (!gameOver) onBeat();
       }
       if (beatFlash > 0) beatFlash = Math.max(0, beatFlash - 0.06);
@@ -595,8 +619,21 @@
       else if (ship.x > W - ship.r) { ship.x = W - ship.r; if (ship.vx > 0) ship.vx = 0; }
       if (ship.y < ship.r) { ship.y = ship.r; if (ship.vy < 0) ship.vy = 0; }
       else if (ship.y > H - ship.r) { ship.y = H - ship.r; if (ship.vy > 0) ship.vy = 0; }
-      // weapon: hold Space to fire; from bar 101 it becomes a laser
-      if (keys[' '] || keys['Spacebar']) { if ((barNum + 1) >= 101) fireLaser(); else shoot(); }
+      // weapon: gun fires on the 8th-note grid; from bar 101 it becomes a heat-limited laser
+      const firing = keys[' '] || keys['Spacebar'];
+      if ((barNum + 1) >= 101) {
+        if (firing && !overheated) {
+          fireLaser();
+          laserHeat = Math.min(1, laserHeat + HEAT_RISE);
+          if (laserHeat >= 1) { overheated = true; sfx('overheat'); }
+        } else {
+          laserHeat = Math.max(0, laserHeat - HEAT_FALL);
+          if (overheated && laserHeat <= 0.3) overheated = false;
+        }
+      } else if (firing) {
+        const e8 = Math.floor(audioPos() / (BEAT / 2));
+        if (e8 !== lastEighth) { lastEighth = e8; shoot(); sfx('shoot_hat'); }
+      }
       // bullets die at the edge (no wrap)
       for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
@@ -615,7 +652,7 @@
         const a = asteroids[i]; let hit = false;
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; hit = true; break; }
+          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small'); hit = true; break; }
         }
         if (hit) splitAsteroid(i);
       }
@@ -623,10 +660,10 @@
       if (invuln <= 0) {
         for (const a of asteroids) {
           if ((a.x - ship.x) ** 2 + (a.y - ship.y) ** 2 < (a.r + ship.r * 0.7) ** 2) {
-            integrity--; invuln = 95; hitFlash = 1;
+            integrity--; invuln = 95; hitFlash = 1; sfx('ship_hit');
             const ka = Math.atan2(ship.y - a.y, ship.x - a.x);
             ship.vx += Math.cos(ka) * 3; ship.vy += Math.sin(ka) * 3;
-            if (integrity <= 0) { gameOver = true; overEl.classList.remove('hidden'); }
+            if (integrity <= 0) { gameOver = true; overEl.classList.remove('hidden'); sfx('game_over'); }
             break;
           }
         }
@@ -677,10 +714,11 @@
     }
 
     function drawAsteroids() {
-      ctx.strokeStyle = GREEN;
+      const col = astColor();
+      ctx.strokeStyle = col;
       ctx.lineWidth = 1.4;
       ctx.lineJoin = 'round';
-      ctx.shadowColor = GREEN;
+      ctx.shadowColor = col;
       ctx.shadowBlur = 4;
       for (const a of asteroids) {
         ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.ang);
@@ -700,7 +738,7 @@
         const a = asteroids[i], px = a.x - x0, py = a.y - y0;
         const t = px * dx + py * dy;
         if (t < 0) continue;                       // behind the ship
-        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; asteroids.splice(i, 1); }
+        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small'); asteroids.splice(i, 1); }
       }
     }
     function drawLaser() {
@@ -725,6 +763,20 @@
         ctx.shadowBlur = 0; ctx.fillStyle = GREEN; ctx.font = '10px "Courier New", monospace';
         ctx.fillText('INCOMING ASTEROIDS', W / 2, H / 2 + 16);
       }
+      const inBreak = (rbar >= 65 && rbar <= 68) || (rbar >= 85 && rbar <= 88);
+      if (!gameOver && inBreak) {
+        ctx.shadowColor = GREEN; ctx.shadowBlur = 10;
+        ctx.fillStyle = HOT; ctx.font = '700 20px "Courier New", monospace';
+        ctx.fillText('STAGE CLEAR', W / 2, H / 2 - 8);
+        ctx.shadowBlur = 0; ctx.fillStyle = GREEN; ctx.font = '10px "Courier New", monospace';
+        ctx.fillText('GET READY', W / 2, H / 2 + 16);
+      }
+      if (!gameOver && rbar >= 101 && rbar <= 104) {
+        ctx.shadowColor = HOT; ctx.shadowBlur = 10;
+        ctx.fillStyle = HOT; ctx.font = '700 18px "Courier New", monospace';
+        ctx.fillText('LASER EQUIPPED', W / 2, H / 2 - 6);
+        ctx.shadowBlur = 0;
+      }
       if (!gameOver && rbar >= 97 && rbar <= 100 && Math.floor(performance.now() / 220) % 2) {
         ctx.shadowColor = RED; ctx.shadowBlur = 12;
         ctx.fillStyle = RED; ctx.font = '700 20px "Courier New", monospace';
@@ -742,15 +794,31 @@
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     }
 
+    function drawHeat() {
+      if ((barNum + 1) < 101) return;
+      const bw = W * 0.44, bh = 5, bx = (W - bw) / 2, by = H - 22;
+      ctx.save();
+      ctx.strokeStyle = DIM; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
+      ctx.fillStyle = laserHeat > 0.85 ? RED : laserHeat > 0.5 ? '#ffcf6b' : GREEN;
+      ctx.fillRect(bx, by, bw * laserHeat, bh);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = '8px "Courier New", monospace';
+      if (overheated && Math.floor(performance.now() / 180) % 2) { ctx.fillStyle = RED; ctx.fillText('OVERHEAT', W / 2, by - 3); }
+      else { ctx.fillStyle = DIM; ctx.fillText('LASER', W / 2, by - 3); }
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.restore();
+    }
+
     function loop() {
       ctx.clearRect(0, 0, W, H);
       laser.on = false;
       if (started) { beatUpdate(); if (!gameOver) update(); }
+      laserSound(laser.on);
       drawAsteroids();
       drawLaser();
       drawBullets();
       drawShip();
       if (started) drawBeat();
+      if (started) drawHeat();
       if (started) drawOverlays();
       if (hitFlash > 0) { ctx.fillStyle = RED; ctx.globalAlpha = hitFlash * 0.35; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
       requestAnimationFrame(loop);
