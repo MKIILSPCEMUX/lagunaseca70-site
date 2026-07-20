@@ -451,10 +451,10 @@
 
     // --- sound effects: files under audio/sfx/ (Mike supplies them; missing files fail silently) ---
     const SFX = {};
-    const laserSnd = new Audio('audio/sfx/laser_loop.mp3'); laserSnd.loop = true; laserSnd.preload = 'auto';
+    const laserSnd = new Audio('audio/laser_loop.mp3'); laserSnd.loop = true; laserSnd.preload = 'auto';
     function sfx(name, vol) {
       if (muted) return;
-      try { const base = SFX[name] || (SFX[name] = new Audio('audio/sfx/' + name + '.mp3')); const n = base.cloneNode(); n.volume = vol || 1; n.play().catch(() => {}); } catch (e) {}
+      try { const base = SFX[name] || (SFX[name] = new Audio('audio/' + name + '.mp3')); const n = base.cloneNode(); n.volume = vol || 1; n.play().catch(() => {}); } catch (e) {}
     }
     function laserSound(on) {
       if (muted || !on) { if (!laserSnd.paused) laserSnd.pause(); return; }
@@ -614,11 +614,7 @@
       const sp = Math.hypot(ship.vx, ship.vy);
       if (sp > MAXSPD) { ship.vx *= MAXSPD / sp; ship.vy *= MAXSPD / sp; }
       ship.x += ship.vx; ship.y += ship.vy;
-      // confine the ship to the screen (no wrap)
-      if (ship.x < ship.r) { ship.x = ship.r; if (ship.vx < 0) ship.vx = 0; }
-      else if (ship.x > W - ship.r) { ship.x = W - ship.r; if (ship.vx > 0) ship.vx = 0; }
-      if (ship.y < ship.r) { ship.y = ship.r; if (ship.vy < 0) ship.vy = 0; }
-      else if (ship.y > H - ship.r) { ship.y = H - ship.r; if (ship.vy > 0) ship.vy = 0; }
+      wrap(ship); // ship wraps around the screen (classic Asteroids)
       // weapon: gun fires on the 8th-note grid; from bar 101 it becomes a heat-limited laser
       const firing = keys[' '] || keys['Spacebar'];
       if ((barNum + 1) >= 101) {
