@@ -450,15 +450,38 @@
     const HEAT_RISE = 0.011, HEAT_FALL = 0.006;
 
     // --- sound effects: files under audio/sfx/ (Mike supplies them; missing files fail silently) ---
-    const SFX = {};
-    const laserSnd = new Audio('audio/laser_loop.mp3'); laserSnd.loop = true; laserSnd.preload = 'auto';
-    function sfx(name, vol) {
-      if (muted) return;
-      try { const base = SFX[name] || (SFX[name] = new Audio('audio/' + name + '.mp3')); const n = base.cloneNode(); n.volume = vol || 1; n.play().catch(() => {}); } catch (e) {}
+    // Web Audio for tight, low-latency SFX (the music track stays on its own HTMLAudio element)
+    let actx = null;
+    const sfxBuf = {};
+    const SFX_NAMES = ['shoot_hat', 'rock_small', 'rock_big', 'ship_hit', 'game_over', 'laser_loop', 'overheat', 'laser_equipped', 'stage_clear', 'danger', 'ui_click', 'lightning'];
+    function initSfx() {
+      if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
+      try {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        SFX_NAMES.forEach(n => fetch('audio/' + n + '.mp3')
+          .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+          .then(b => actx.decodeAudioData(b))
+          .then(buf => { sfxBuf[n] = buf; }).catch(() => {}));
+      } catch (e) {}
     }
+    function sfx(name, vol) {
+      if (muted || !actx || !sfxBuf[name]) return;
+      try {
+        const s = actx.createBufferSource(); s.buffer = sfxBuf[name];
+        const g = actx.createGain(); g.gain.value = vol == null ? 1 : vol;
+        s.connect(g).connect(actx.destination); s.start();
+      } catch (e) {}
+    }
+    let laserSrc = null;
     function laserSound(on) {
-      if (muted || !on) { if (!laserSnd.paused) laserSnd.pause(); return; }
-      if (laserSnd.paused) laserSnd.play().catch(() => {});
+      if (!actx) return;
+      if (muted || !on) { if (laserSrc) { try { laserSrc.stop(); } catch (e) {} laserSrc = null; } return; }
+      if (laserSrc || !sfxBuf['laser_loop']) return;
+      try {
+        laserSrc = actx.createBufferSource(); laserSrc.buffer = sfxBuf['laser_loop']; laserSrc.loop = true;
+        const g = actx.createGain(); g.gain.value = 0.7;
+        laserSrc.connect(g).connect(actx.destination); laserSrc.start();
+      } catch (e) {}
     }
     function hexRgb(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
     function lerpColor(a, b, t) { const A = hexRgb(a), B = hexRgb(b); return 'rgb(' + Math.round(A[0] + (B[0] - A[0]) * t) + ',' + Math.round(A[1] + (B[1] - A[1]) * t) + ',' + Math.round(A[2] + (B[2] - A[2]) * t) + ')'; }
@@ -514,8 +537,9 @@
     function resetGame() {
       asteroids.length = 0; bullets.length = 0; score = 0; integrity = 3;
       invuln = 80; hitFlash = 0; gameOver = false; reset();
-      laserHeat = 0; overheated = false; lastEighth = -1; laserSnd.pause();
+      laserHeat = 0; overheated = false; lastEighth = -1; laserSound(false);
       overEl.classList.add('hidden');
+      sfx('ui_click');
       // restart the track and beat clock so each run begins from the intro
       lastBeat = -1; lastPos = 0; clockStart = performance.now();
       try { audio.currentTime = 0; if (!muted) audio.play(); } catch (e) {}
@@ -545,8 +569,9 @@
         if (beatInBar === 0 && !gameOver) {
           const rb = barNum + 1;
           if (rb === 65 || rb === 85) sfx('stage_clear');
-          else if (rb === 97) sfx('danger');
-          else if (rb === 101) sfx('laser_equipped');
+          if (rb === 31 || rb === 97) sfx('danger');
+          if (rb === 101) sfx('laser_equipped');
+          if (rb >= 133) sfx('lightning', 0.8);
         }
         if (!gameOver) onBeat();
       }
@@ -574,7 +599,9 @@
       started = true;
       hint.classList.add('hidden');
       clockStart = performance.now();
+      initSfx();
       if (!muted) audio.play().catch(() => {});
+      sfx('ui_click');
     }
 
     function shoot() {
@@ -628,7 +655,7 @@
         }
       } else if (firing) {
         const e8 = Math.floor(audioPos() / (BEAT / 2));
-        if (e8 !== lastEighth) { lastEighth = e8; shoot(); sfx('shoot_hat'); }
+        if (e8 !== lastEighth) { lastEighth = e8; shoot(); sfx('shoot_hat', 0.22); }
       }
       // bullets die at the edge (no wrap)
       for (let i = bullets.length - 1; i >= 0; i--) {
@@ -648,7 +675,7 @@
         const a = asteroids[i]; let hit = false;
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small'); hit = true; break; }
+          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', 1.3); hit = true; break; }
         }
         if (hit) splitAsteroid(i);
       }
@@ -656,7 +683,7 @@
       if (invuln <= 0) {
         for (const a of asteroids) {
           if ((a.x - ship.x) ** 2 + (a.y - ship.y) ** 2 < (a.r + ship.r * 0.7) ** 2) {
-            integrity--; invuln = 95; hitFlash = 1; sfx('ship_hit');
+            integrity--; invuln = 95; hitFlash = 1; sfx('ship_hit', 1.6);
             const ka = Math.atan2(ship.y - a.y, ship.x - a.x);
             ship.vx += Math.cos(ka) * 3; ship.vy += Math.sin(ka) * 3;
             if (integrity <= 0) { gameOver = true; overEl.classList.remove('hidden'); sfx('game_over'); }
@@ -734,15 +761,15 @@
         const a = asteroids[i], px = a.x - x0, py = a.y - y0;
         const t = px * dx + py * dy;
         if (t < 0) continue;                       // behind the ship
-        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small'); asteroids.splice(i, 1); }
+        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', 1.3); asteroids.splice(i, 1); }
       }
     }
     function drawLaser() {
       if (!laser.on) return;
       const ex = laser.x0 + laser.dx * laser.len, ey = laser.y0 + laser.dy * laser.len;
       ctx.save();
-      ctx.shadowColor = GREEN; ctx.shadowBlur = 12;
-      ctx.strokeStyle = GREEN; ctx.lineWidth = 5; ctx.globalAlpha = 0.45;
+      ctx.shadowColor = NEONPINK; ctx.shadowBlur = 12;
+      ctx.strokeStyle = NEONPINK; ctx.lineWidth = 5; ctx.globalAlpha = 0.5;
       ctx.beginPath(); ctx.moveTo(laser.x0, laser.y0); ctx.lineTo(ex, ey); ctx.stroke();
       ctx.strokeStyle = HOT; ctx.lineWidth = 1.8; ctx.globalAlpha = 1;
       ctx.beginPath(); ctx.moveTo(laser.x0, laser.y0); ctx.lineTo(ex, ey); ctx.stroke();
@@ -773,7 +800,7 @@
         ctx.fillText('LASER EQUIPPED', W / 2, H / 2 - 6);
         ctx.shadowBlur = 0;
       }
-      if (!gameOver && rbar >= 97 && rbar <= 100 && Math.floor(performance.now() / 220) % 2) {
+      if (!gameOver && ((rbar >= 31 && rbar <= 32) || (rbar >= 97 && rbar <= 100)) && Math.floor(performance.now() / 220) % 2) {
         ctx.shadowColor = RED; ctx.shadowBlur = 12;
         ctx.fillStyle = RED; ctx.font = '700 20px "Courier New", monospace';
         ctx.fillText('DANGER AHEAD', W / 2, H / 2);
@@ -792,14 +819,14 @@
 
     function drawHeat() {
       if ((barNum + 1) < 101) return;
-      const bw = W * 0.44, bh = 5, bx = (W - bw) / 2, by = H - 22;
+      const bw = W * 0.44, bh = 5, bx = (W - bw) / 2, by = H - 46;
       ctx.save();
       ctx.strokeStyle = DIM; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
-      ctx.fillStyle = laserHeat > 0.85 ? RED : laserHeat > 0.5 ? '#ffcf6b' : GREEN;
+      ctx.fillStyle = (overheated || laserHeat > 0.85) ? RED : NEONPINK;
       ctx.fillRect(bx, by, bw * laserHeat, bh);
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = '8px "Courier New", monospace';
       if (overheated && Math.floor(performance.now() / 180) % 2) { ctx.fillStyle = RED; ctx.fillText('OVERHEAT', W / 2, by - 3); }
-      else { ctx.fillStyle = DIM; ctx.fillText('LASER', W / 2, by - 3); }
+      else { ctx.fillStyle = NEONPINK; ctx.fillText('LASER', W / 2, by - 3); }
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
       ctx.restore();
     }
@@ -825,6 +852,7 @@
       const ox = W ? ship.x / W : 0.5, oy = H ? ship.y / H : 0.5;
       resize(); ship.x = ox * W; ship.y = oy * H;
     });
+    document.querySelectorAll('.switch').forEach(el => el.addEventListener('mousedown', () => { initSfx(); sfx('ui_click'); }));
     if (document.readyState !== 'loading') init();
     else window.addEventListener('DOMContentLoaded', init);
   })();
