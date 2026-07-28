@@ -488,23 +488,38 @@
           AST_SCORE = { 3: 25, 2: 15, 1: 10 }, MAX_AST = 44;
     const asteroids = [];
     const laser = { on: false, x0: 0, y0: 0, dx: 0, dy: 0, len: 0 };
-    let score = 0, integrity = 3, invuln = 0, hitFlash = 0, gameOver = false;
-    let laserHeat = 0, overheated = false, lastEighth = -1;
+    let score = 0, integrity = 3, invuln = 0, hitFlash = 0, killFlash = 0, gameOver = false;
+    let laserHeat = 0, overheated = false, lastEighth = -1, wasThrust = false;
     const HEAT_RISE = 0.011, HEAT_FALL = 0.006;
 
     // --- sound effects: files under audio/sfx/ (Mike supplies them; missing files fail silently) ---
     // Web Audio for tight, low-latency SFX (the music track stays on its own HTMLAudio element)
     let actx = null;
     const sfxBuf = {};
-    const SFX_NAMES = ['shoot_hat', 'rock_small', 'rock_big', 'ship_hit', 'game_over', 'laser_loop', 'overheat', 'laser_equipped', 'stage_clear', 'danger', 'ui_click', 'lightning'];
+    const SFX_NAMES = ['shoot_hat', 'rock_small', 'rock_big', 'ship_hit', 'game_over', 'laser_loop', 'overheat', 'laser_equipped', 'stage_clear', 'danger', 'ui_click', 'lightning', 'ship_boost'];
+    const MUSIC_GAIN = 1.4;
+    let musicSrc = null, musicGain = null;
+    function initMusicGain() {
+      if (!actx || musicSrc) return;
+      try {
+        musicSrc = actx.createMediaElementSource(audio);
+        musicGain = actx.createGain(); musicGain.gain.value = MUSIC_GAIN;
+        // gentle limiter so the extra gain can't clip
+        const comp = actx.createDynamicsCompressor();
+        comp.threshold.value = -6; comp.knee.value = 6; comp.ratio.value = 12;
+        comp.attack.value = 0.003; comp.release.value = 0.12;
+        musicSrc.connect(musicGain).connect(comp).connect(actx.destination);
+      } catch (e) {}
+    }
     function initSfx() {
-      if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
+      if (actx) { if (actx.state === 'suspended') actx.resume(); initMusicGain(); return; }
       try {
         actx = new (window.AudioContext || window.webkitAudioContext)();
         SFX_NAMES.forEach(n => fetch('audio/' + n + '.mp3')
           .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
           .then(b => actx.decodeAudioData(b))
           .then(buf => { sfxBuf[n] = buf; }).catch(() => {}));
+        initMusicGain();
       } catch (e) {}
     }
     function sfx(name, vol) {
@@ -579,7 +594,7 @@
     }
     function resetGame() {
       asteroids.length = 0; bullets.length = 0; score = 0; integrity = 3;
-      invuln = 80; hitFlash = 0; gameOver = false; reset();
+      invuln = 80; hitFlash = 0; killFlash = 0; wasThrust = false; gameOver = false; reset();
       laserHeat = 0; overheated = false; lastEighth = -1; laserSound(false);
       overEl.classList.add('hidden');
       sfx('ui_click');
@@ -678,6 +693,8 @@
       if (keys['ArrowLeft']) ship.a -= ROT;
       if (keys['ArrowRight']) ship.a += ROT;
       thrusting = !!keys['ArrowUp'];
+      if (thrusting && !wasThrust && !gameOver) sfx('ship_boost', 0.9); // one boost blip per press
+      wasThrust = thrusting;
       if (thrusting) { ship.vx += Math.cos(ship.a) * THRUST; ship.vy += Math.sin(ship.a) * THRUST; }
       if (keys['ArrowDown']) { ship.vx *= 0.93; ship.vy *= 0.93; }
       ship.vx *= FRICTION; ship.vy *= FRICTION;
@@ -718,7 +735,7 @@
         const a = asteroids[i]; let hit = false;
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.9); hit = true; break; }
+          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.45); killFlash = 1; hit = true; break; }
         }
         if (hit) splitAsteroid(i);
       }
@@ -736,6 +753,7 @@
       }
       if (invuln > 0) invuln--;
       if (hitFlash > 0) hitFlash = Math.max(0, hitFlash - 0.05);
+      if (killFlash > 0) killFlash = Math.max(0, killFlash - 0.12);
       if (headEl) headEl.textContent = ((Math.round(ship.a * 180 / Math.PI) + 90) % 360 + 360) % 360;
       if (scoreEl) scoreEl.textContent = score;
       if (hullEl) hullEl.textContent = Math.max(0, integrity);
@@ -804,7 +822,7 @@
         const a = asteroids[i], px = a.x - x0, py = a.y - y0;
         const t = px * dx + py * dy;
         if (t < 0) continue;                       // behind the ship
-        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.9); asteroids.splice(i, 1); }
+        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.45); killFlash = 1; asteroids.splice(i, 1); }
       }
     }
     function drawLaser() {
@@ -886,6 +904,7 @@
       if (started) drawBeat();
       if (started) drawHeat();
       if (started) drawOverlays();
+      if (killFlash > 0) { ctx.fillStyle = GREEN; ctx.globalAlpha = killFlash * 0.14; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
       if (hitFlash > 0) { ctx.fillStyle = RED; ctx.globalAlpha = hitFlash * 0.35; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
       requestAnimationFrame(loop);
     }
