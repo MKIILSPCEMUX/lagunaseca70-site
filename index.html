@@ -123,6 +123,14 @@
     .foot a { color: var(--ink); text-decoration: none; border-bottom: 1px solid rgba(233,231,224,0.25); padding-bottom: 1px; }
     .foot a:hover { border-color: var(--ink); }
     .foot .dot { opacity: 0.4; margin: 0 6px; }
+    .signup-label { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); margin-bottom: 9px; }
+    .signup { display: flex; gap: 8px; justify-content: center; margin-bottom: 18px; }
+    .signup input { flex: 1; max-width: 210px; height: 34px; padding: 6px 14px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06); color: var(--ink); font-size: 12px; }
+    .signup input::placeholder { color: rgba(233,231,224,0.4); }
+    .signup button { height: 34px; padding: 6px 18px; border-radius: 20px; border: none; background: var(--ink); color: #06080d; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; cursor: pointer; }
+    .signup button:hover { filter: brightness(1.08); }
+    .links { line-height: 2; }
+    .byline { margin-top: 12px; opacity: 0.68; }
 
     @media (max-width: 420px) {
       .thumb { flex-basis: 92px; width: 92px; height: 70px; }
@@ -160,14 +168,23 @@
     </div>
 
     <div class="foot">
-      Music and games by Laguna Seca<br />
-      <a href="https://lagunaseca.bandcamp.com/album/live-from-m-sli-mountain" target="_blank" rel="noopener noreferrer">Bandcamp</a>
-      <span class="dot">&middot;</span>
-      <a href="https://patreon.com/thenorthhouse" target="_blank" rel="noopener noreferrer">Patreon</a>
-      <span class="dot">&middot;</span>
-      <a href="https://buttondown.com/LagunaSeca70" target="_blank" rel="noopener noreferrer">Mailing list</a>
-      <span class="dot">&middot;</span>
-      <a href="mailto:contact@lagunaseca70.com">Contact</a>
+      <div class="signup-label">Join the Laguna Seca mailing list</div>
+      <form class="signup" action="https://buttondown.com/api/emails/embed-subscribe/LagunaSeca70" method="post" target="popupwindow" onsubmit="window.open('https://buttondown.com/LagunaSeca70','popupwindow')">
+        <input type="email" name="email" required placeholder="your@email.com" aria-label="Email" />
+        <button type="submit">Join</button>
+      </form>
+      <div class="links">
+        <a href="https://lagunaseca.bandcamp.com/" target="_blank" rel="noopener noreferrer">Bandcamp</a>
+        <span class="dot">&middot;</span>
+        <a href="https://www.instagram.com/lagunaseca70" target="_blank" rel="noopener noreferrer">Instagram</a>
+        <span class="dot">&middot;</span>
+        <a href="https://www.youtube.com/@LagunaSeca70" target="_blank" rel="noopener noreferrer">YouTube</a>
+        <span class="dot">&middot;</span>
+        <a href="https://www.tiktok.com/@lagunaseca70" target="_blank" rel="noopener noreferrer">TikTok</a>
+        <span class="dot">&middot;</span>
+        <a href="mailto:contact@lagunaseca70.com">Contact</a>
+      </div>
+      <div class="byline">Music and games by Laguna Seca</div>
     </div>
   </div>
 </body>

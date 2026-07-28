@@ -346,6 +346,31 @@
     .sh-sub { font-size: 11px; letter-spacing: 0.28em; color: var(--crt-hot); }
     .sh-note { font-size: 9px; letter-spacing: 0.12em; line-height: 1.7; color: var(--crt-green); opacity: 0.85; }
 
+    /* mailing list */
+    .ds-signup { display: flex; gap: 8px; justify-content: center; margin: 2px 6px 10px; }
+    .ds-signup input { flex: 1; max-width: 190px; height: 32px; padding: 5px 12px; border-radius: 16px; border: 1px solid var(--grey-dk); background: #fbfaf7; color: var(--ink); font-size: 12px; }
+    .ds-signup button { height: 32px; padding: 5px 16px; border-radius: 16px; border: none; background: var(--ink); color: var(--hull); font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; cursor: pointer; }
+    .ds-signup button:hover { filter: brightness(1.4); }
+
+    /* touch controls (only on touch devices) */
+    .touch-controls { position: absolute; inset: 0; z-index: 6; pointer-events: none; display: none; }
+    body.touch .touch-controls { display: block; }
+    .tc-left { position: absolute; left: 10px; bottom: 12px; display: flex; gap: 10px; }
+    .tc-right { position: absolute; right: 10px; bottom: 12px; display: flex; gap: 10px; align-items: flex-end; }
+    .tc-btn {
+      pointer-events: auto;
+      width: 52px; height: 52px; border-radius: 50%;
+      background: rgba(72, 216, 107, 0.10);
+      border: 1.5px solid rgba(72, 216, 107, 0.5);
+      color: var(--crt-hot); font-size: 20px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+    }
+    .tc-btn:active { background: rgba(72, 216, 107, 0.30); }
+    .tc-fire { width: 60px; height: 60px; font-size: 11px; letter-spacing: 0.1em; border-color: rgba(255, 79, 163, 0.6); background: rgba(255, 79, 163, 0.12); }
+    .tc-fire:active { background: rgba(255, 79, 163, 0.34); }
+
     @media (max-width: 480px) {
       .wrap { padding: 10px 6px 18px; }
       .cabinet { padding: 16px 13px 12px; }
@@ -392,6 +417,17 @@
           </div>
 
           <div class="readout">NO.5</div>
+
+          <div class="touch-controls" id="touch">
+            <div class="tc-left">
+              <button class="tc-btn" data-k="ArrowLeft" aria-label="Rotate left">&#9664;</button>
+              <button class="tc-btn" data-k="ArrowRight" aria-label="Rotate right">&#9654;</button>
+            </div>
+            <div class="tc-right">
+              <button class="tc-btn tc-thrust" data-k="ArrowUp" aria-label="Thrust">&#9650;</button>
+              <button class="tc-btn tc-fire" data-k=" " aria-label="Fire">FIRE</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -403,6 +439,11 @@
           <span class="led teal"></span>Laguna Sneca
         </a>
       </div>
+
+      <form class="ds-signup" action="https://buttondown.com/api/emails/embed-subscribe/LagunaSeca70" method="post" target="popupwindow" onsubmit="window.open('https://buttondown.com/LagunaSeca70','popupwindow')">
+        <input type="email" name="email" required placeholder="your@email.com" aria-label="Email" />
+        <button type="submit">Join</button>
+      </form>
 
       <div class="hull-foot">
         The Dark Star &middot; a rhythm-synced arcade game, in build<br />
@@ -855,6 +896,20 @@
       resize(); ship.x = ox * W; ship.y = oy * H;
     });
     document.querySelectorAll('.switch').forEach(el => el.addEventListener('mousedown', () => { initSfx(); sfx('ui_click'); }));
+
+    // touch controls: map on-screen buttons to the same key inputs (desktop is untouched)
+    const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    if (isTouch) document.body.classList.add('touch');
+    document.querySelectorAll('.tc-btn').forEach(btn => {
+      const k = btn.getAttribute('data-k');
+      const press = (e) => { e.preventDefault(); start(); if (gameOver && k === ' ') resetGame(); keys[k] = true; };
+      const release = (e) => { e.preventDefault(); keys[k] = false; };
+      btn.addEventListener('touchstart', press, { passive: false });
+      btn.addEventListener('touchend', release, { passive: false });
+      btn.addEventListener('touchcancel', release, { passive: false });
+    });
+    cv.addEventListener('touchstart', (e) => { if (!started) { e.preventDefault(); start(); } }, { passive: false });
+
     if (document.readyState !== 'loading') init();
     else window.addEventListener('DOMContentLoaded', init);
   })();

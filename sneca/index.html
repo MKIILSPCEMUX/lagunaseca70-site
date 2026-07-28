@@ -353,9 +353,9 @@
         </button>
         <button
           class="btn btn-pink"
-          onclick="window.open('https://patreon.com/thenorthhouse', '_blank')"
+          onclick="window.location.href='/darkstar/'"
         >
-          Patreon
+          The Dark Star
         </button>
       </div>
 
@@ -834,7 +834,7 @@ canvas.addEventListener(
     }
 
     function drawScore() {
-      ctx.fillStyle = "#000000";
+      ctx.fillStyle = "#ffffff";
       ctx.font = "18px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
       ctx.textBaseline = "top";
       ctx.textAlign = "left";
@@ -851,7 +851,7 @@ canvas.addEventListener(
         ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight);
       }
 
-      ctx.fillStyle = "#000000";
+      ctx.fillStyle = "#ffffff";
       ctx.font = "20px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
