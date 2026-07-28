@@ -3,988 +3,172 @@
 <head>
   <meta charset="UTF-8" />
   <title>Laguna Seca</title>
-
-  <!-- Mobile + scaling -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.png" />
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="game/laguna-logo.png" />
-
-  <!-- Open Graph / social preview -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Laguna Seca" />
-  <meta property="og:description" content="Music by Laguna Seca. Play Laguna Sneca, a snake game locked to the beat. New album O Tempo out this autumn on Throttle Records." />
+  <meta property="og:description" content="A little arcade by Laguna Seca. Play The Dark Star and Laguna Sneca, two mini games locked to the beat." />
   <meta property="og:url" content="https://lagunaseca70.com/" />
   <meta property="og:image" content="https://lagunaseca70.com/social-preview.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Laguna Seca" />
-  <meta name="twitter:description" content="Music by Laguna Seca. Play Laguna Sneca, a snake game locked to the beat. New album O Tempo out this autumn on Throttle Records." />
+  <meta name="twitter:description" content="A little arcade by Laguna Seca. Play The Dark Star and Laguna Sneca, two mini games locked to the beat." />
   <meta name="twitter:image" content="https://lagunaseca70.com/social-preview.jpg" />
 
   <style>
     :root {
-      --bg-gold: #e4b93b;
-      --cabinet-purple: #210c3b;
-      --cabinet-purple-inner: #18072c;
-      --button-blue: #13b0e5;
-      --button-pink: #ff3a7f;
-      --text-light: #ffffff;
-      --snake-body: #7cf35b;
-      --snake-border: #000000;
-      --food-color: #ff6b6b;
+      --space: #06080d;
+      --ink: #e9e7e0;
+      --dim: rgba(233, 231, 224, 0.6);
+      --green: #48d86b;
+      --pink: #ff3a7f;
+      --purple: #2a1147;
     }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html,
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; }
     body {
-      height: 100%;
-      width: 100%;
-    }
-
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        sans-serif;
-      background: var(--bg-gold);
-      color: var(--text-light);
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
+      font-family: "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+      background: var(--space);
+      color: var(--ink);
       min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* Disable page scroll during play so arrows do not scroll */
-    body.playing {
-      overflow: hidden;
-    }
-
-    .background {
-      position: fixed;
-      inset: 0;
-      background: url("game/background.jpg") center center / cover no-repeat;
-      filter: blur(0px);
-      z-index: -1;
-    }
-
-    .cabinet-wrapper {
-      width: 100%;
-      max-width: 430px;
-      padding: 16px 8px 24px;
-      display: flex;
-      justify-content: center;
-    }
-
-    .cabinet {
-      width: 100%;
-      background: radial-gradient(circle at top, #3a1c6f 0, var(--cabinet-purple) 45%, #120320 100%);
-      border-radius: 32px;
-      box-shadow:
-        0 20px 40px rgba(0, 0, 0, 0.6),
-        0 0 0 2px rgba(255, 255, 255, 0.08);
-      padding: 24px 20px 8px; /* tighter bottom padding */
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
+      padding: 40px 16px;
+      overflow-x: hidden;
+    }
+    .background {
+      position: fixed; inset: 0; z-index: -2;
+      background: url("/darkstar/img/darkstar_flare_b.jpg") center center / cover no-repeat;
+    }
+    .background::after {
+      content: ""; position: absolute; inset: 0;
+      background: radial-gradient(circle at 50% 30%, rgba(6,8,13,0.55), rgba(6,8,13,0.9) 80%);
     }
 
-    .logo {
-      width: 100%;
-      text-align: center;
-      margin-bottom: 8px;
-    }
+    .wrap { width: 100%; max-width: 480px; margin: auto; }
 
-    .logo img {
-      width: 90%;
-      max-width: 320px;
-      image-rendering: pixelated;
-      display: block;
-      margin: 0 auto;
+    .head { text-align: center; margin-bottom: 26px; }
+    .head h1 {
+      font-size: clamp(30px, 9vw, 46px);
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-indent: 0.14em;
+      text-transform: uppercase;
     }
-
-    .subtitle {
+    .head .tag {
+      margin-top: 10px;
       font-size: 10px;
-      letter-spacing: 0.28em;
+      letter-spacing: 0.42em;
+      text-indent: 0.42em;
       text-transform: uppercase;
-      text-align: center;
-      color: rgba(255, 255, 255, 0.78);
-      margin-bottom: 18px;
+      color: var(--dim);
     }
 
-    .screen-shell {
-      width: 100%;
-      background: linear-gradient(135deg, #19062a, #0c0216);
-      border-radius: 18px;
-      padding: 10px;
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-      margin-bottom: 18px;
-    }
+    .cards { display: flex; flex-direction: column; gap: 16px; }
 
-    .screen-inner {
-      width: 100%;
-      background: #000;
-      border-radius: 10px;
-      padding: 6px;
-      box-shadow: inset 0 0 0 2px #000;
+    .card {
       display: flex;
-      justify-content: center;
       align-items: center;
-    }
-
-    .screen-viewport {
-      width: 100%;
-      aspect-ratio: 9 / 16;
-      max-height: calc(100vh - 260px);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background: #000;
-      overflow: hidden;
-    }
-
-    #gameCanvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      image-rendering: pixelated;
-      border: 3px solid #000000;
-      border-radius: 0;
-      background: #000000;
-    }
-
-    .buttons-row {
-      display: flex;
-      justify-content: center;
-      gap: 18px;
-      margin-top: 8px;
-      margin-bottom: 10px;
-      width: 100%;
-    }
-
-    .btn {
-      flex: 1;
-      max-width: 150px;
-      padding: 10px 14px;
-      border-radius: 28px;
-      border: none;
-      cursor: pointer;
-      font-size: 11px;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      font-weight: 700;
-      color: #04101f;
-      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.38);
-      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
-    }
-
-    .btn-blue {
-      background: var(--button-blue);
-    }
-
-    .btn-pink {
-      background: var(--button-pink);
-    }
-
-    .btn:hover {
-      transform: translateY(-1px);
-      filter: brightness(1.03);
-      box-shadow: 0 10px 18px rgba(0, 0, 0, 0.5);
-    }
-
-    .btn:active {
-      transform: translateY(1px);
-      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
-    }
-
-    .footer {
-      text-align: center;
-      font-size: 9px;
-      line-height: 1.5;
-      color: rgba(255, 255, 255, 0.8);
-    }
-
-    .footer a {
-      color: #ff62a5;
+      gap: 16px;
+      padding: 16px;
+      border-radius: 16px;
       text-decoration: none;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+      transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+    }
+    .card:hover { transform: translateY(-2px); background: rgba(255, 255, 255, 0.06); }
+
+    .thumb {
+      flex: 0 0 108px;
+      width: 108px; height: 82px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      border: 2px solid #000;
+    }
+    .thumb img { width: 84%; image-rendering: pixelated; display: block; }
+
+    .card-body { flex: 1; min-width: 0; }
+    .card-name {
+      font-size: 19px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;
+    }
+    .card-tag { margin-top: 4px; font-size: 10.5px; letter-spacing: 0.08em; color: var(--dim); }
+    .card-play {
+      margin-top: 9px; font-size: 10px; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase;
     }
 
-    .footer a:hover {
-      text-decoration: underline;
-    }
+    /* Dark Star card */
+    .card.darkstar .thumb { background: linear-gradient(160deg, #0b2011, #04070c); }
+    .card.darkstar:hover { border-color: rgba(72, 216, 107, 0.6); box-shadow: 0 14px 34px rgba(0,0,0,0.5), 0 0 22px rgba(72,216,107,0.22); }
+    .card.darkstar .card-play { color: var(--green); }
 
-    /* Newsletter form */
-    .newsletter {
-      margin-top: 6px;
-      text-align: center;
-    }
+    /* Sneca card */
+    .card.sneca .thumb { background: radial-gradient(circle at top, #3a1c6f, #120320); }
+    .card.sneca:hover { border-color: rgba(255, 58, 127, 0.6); box-shadow: 0 14px 34px rgba(0,0,0,0.5), 0 0 22px rgba(255,58,127,0.22); }
+    .card.sneca .card-play { color: var(--pink); }
 
-    .newsletter-label {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 9px;
-      opacity: 0.8;
-      letter-spacing: 0.03em;
+    .foot {
+      margin-top: 28px; text-align: center;
+      font-size: 10px; letter-spacing: 0.1em; color: var(--dim);
+      line-height: 2;
     }
+    .foot a { color: var(--ink); text-decoration: none; border-bottom: 1px solid rgba(233,231,224,0.25); padding-bottom: 1px; }
+    .foot a:hover { border-color: var(--ink); }
+    .foot .dot { opacity: 0.4; margin: 0 6px; }
 
-    .newsletter-row {
-      display: flex;
-      gap: 6px;
-      justify-content: center;
-    }
-
-    .newsletter-row input[type="email"] {
-      flex: 1;
-      max-width: 150px;
-      padding: 5px 8px;
-      border-radius: 18px;
-      border: none;
-      font-size: 10.5px;
-      height: 28px;
-    }
-
-    .newsletter-row button {
-      padding: 5px 12px;
-      border-radius: 18px;
-      border: none;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      cursor: pointer;
-      background: #ffffff;
-      color: #210c3b;
-      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
-      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
-      height: 28px;
-    }
-
-    .newsletter-row button:hover {
-      transform: translateY(-1px);
-      filter: brightness(1.04);
-      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45);
-    }
-
-    .newsletter-row button:active {
-      transform: translateY(1px);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-    }
-
-    .newsletter-row button:disabled {
-      opacity: 0.6;
-      cursor: default;
-      transform: none;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
-    }
-
-    .newsletter-feedback {
-      text-align: center;
-      font-size: 10px;
-      margin-top: 4px;
-      opacity: 0;
-      transform: translateY(4px);
-      transition: opacity 200ms ease-out, transform 200ms ease-out;
-      pointer-events: none;
-    }
-
-    .newsletter-feedback.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    #newsletter-success {
-      color: var(--snake-body);
-    }
-
-    #newsletter-error {
-      color: var(--food-color);
-    }
-
-    @media (max-width: 480px) {
-      .cabinet-wrapper {
-        padding: 8px 4px 16px;
-      }
-      .cabinet {
-        padding: 20px 14px 6px; /* tight bottom on mobile too */
-        border-radius: 26px;
-      }
-      .screen-shell {
-        padding: 8px;
-      }
-      .screen-inner {
-        padding: 4px;
-      }
-      .buttons-row {
-        gap: 10px;
-      }
+    @media (max-width: 420px) {
+      .thumb { flex-basis: 92px; width: 92px; height: 70px; }
+      .card-name { font-size: 17px; }
     }
   </style>
 </head>
 <body>
   <div class="background"></div>
 
-  <div class="cabinet-wrapper">
-    <div class="cabinet">
-      <div class="logo">
-        <img src="game/laguna-logo.png" alt="Laguna Sneca logo" />
-      </div>
-      <div class="subtitle">A MINI GAME BY LAGUNA SECA</div>
+  <div class="wrap">
+    <div class="head">
+      <h1>Laguna Seca</h1>
+      <div class="tag">Mini-game arcade</div>
+    </div>
 
-      <div class="screen-shell">
-        <div class="screen-inner">
-          <div class="screen-viewport">
-            <canvas id="gameCanvas"></canvas>
-          </div>
+    <div class="cards">
+      <a class="card darkstar" href="/darkstar/">
+        <div class="thumb"><img src="/darkstar/img/darkstar_title.png" alt="The Dark Star" /></div>
+        <div class="card-body">
+          <div class="card-name">The Dark Star</div>
+          <div class="card-tag">Rhythm asteroids &middot; 135 BPM &middot; sound on</div>
+          <div class="card-play">Play &#9654;</div>
         </div>
-      </div>
+      </a>
 
-      <div class="buttons-row">
-        <button
-          class="btn btn-blue"
-          onclick="window.open('https://lagunaseca.bandcamp.com/track/laguna-sneca', '_blank')"
-        >
-          Bandcamp
-        </button>
-        <button
-          class="btn btn-pink"
-          onclick="window.open('https://patreon.com/thenorthhouse', '_blank')"
-        >
-          Patreon
-        </button>
-      </div>
-
-      <div class="footer">
-        Game, music and design by Laguna Seca. Snake locked to 105&nbsp;BPM.<br />
-        Contact:
-        <a href="mailto:contact@lagunaseca70.com">contact@lagunaseca70.com</a>
-        &nbsp;|&nbsp;
-        <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">
-          Buy me a coffee
-        </a>
-      </div>
-
-      <!-- Newsletter form -->
-      <form
-        id="newsletter-form"
-        class="newsletter"
-        action="https://buttondown.com/api/emails/embed-subscribe/LagunaSeca70"
-        method="post"
-        target="popupwindow"
-        onsubmit="window.open('https://buttondown.com/LagunaSeca70','popupwindow')"
-      >
-        <label for="newsletter-email" class="newsletter-label">
-          Join the Laguna Seca mailing list:
-        </label>
-
-        <div class="newsletter-row">
-          <input
-            id="newsletter-email"
-            type="email"
-            name="email"
-            required
-            placeholder="your@email.com"
-          />
-          <button type="submit">Join</button>
+      <a class="card sneca" href="/sneca/">
+        <div class="thumb"><img src="/game/laguna-logo.png" alt="Laguna Sneca" /></div>
+        <div class="card-body">
+          <div class="card-name">Laguna Sneca</div>
+          <div class="card-tag">Snake &middot; 105 BPM &middot; swipe or arrows</div>
+          <div class="card-play">Play &#9654;</div>
         </div>
-      </form>
+      </a>
+    </div>
 
-      <div id="newsletter-success" class="newsletter-feedback">
-        ✔ Thanks for joining! Check your inbox for confirmation.
-      </div>
-      <div id="newsletter-error" class="newsletter-feedback">
-        Please enter a valid email address.
-      </div>
+    <div class="foot">
+      Music and games by Laguna Seca<br />
+      <a href="https://lagunaseca.bandcamp.com/album/live-from-m-sli-mountain" target="_blank" rel="noopener noreferrer">Bandcamp</a>
+      <span class="dot">&middot;</span>
+      <a href="https://patreon.com/thenorthhouse" target="_blank" rel="noopener noreferrer">Patreon</a>
+      <span class="dot">&middot;</span>
+      <a href="https://buttondown.com/LagunaSeca70" target="_blank" rel="noopener noreferrer">Mailing list</a>
+      <span class="dot">&middot;</span>
+      <a href="mailto:contact@lagunaseca70.com">Contact</a>
     </div>
   </div>
-
-  <script>
-    // -----------------------------
-    // Core settings
-    // -----------------------------
-    const GRID_COLS = 19;
-    const GRID_ROWS = 34;
-    const CELL_SIZE = 24;
-    const GAME_WIDTH = GRID_COLS * CELL_SIZE;
-    const GAME_HEIGHT = GRID_ROWS * CELL_SIZE;
-    const TICK_MS = 145;       // snappy, still in time with loop
-    const START_DELAY_MS = 200;
-
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
-
-    canvas.width = GAME_WIDTH;
-    canvas.height = GAME_HEIGHT;
-
-    ctx.lineJoin = "miter";
-    ctx.lineCap = "square";
-
-    function resizeCanvasDisplay() {
-      const viewport = document.querySelector(".screen-viewport");
-      if (!viewport) return;
-
-      const maxWidth = viewport.clientWidth;
-      const maxHeight = viewport.clientHeight;
-
-      const scale = Math.min(
-        maxWidth / GAME_WIDTH,
-        maxHeight / GAME_HEIGHT
-      );
-
-      canvas.style.width = GAME_WIDTH * scale + "px";
-      canvas.style.height = GAME_HEIGHT * scale + "px";
-    }
-
-    window.addEventListener("resize", resizeCanvasDisplay);
-    window.addEventListener("orientationchange", resizeCanvasDisplay);
-    resizeCanvasDisplay();
-
-    // -----------------------------
-    // Assets
-    // -----------------------------
-    const bgImage = new Image();
-    bgImage.src = "game/background.jpg";
-
-    const logoImage = new Image();
-    logoImage.src = "game/laguna-logo.png";
-
-    const deathImage = new Image();
-    deathImage.src = "game/you_died_from_hot_clean.png";
-
-    const music = new Audio("game/loop.mp3");
-    music.loop = true;
-
-    const deathSound = new Audio("game/death.wav");
-
-    bgImage.onload = () => {
-      draw();
-    };
-
-    // -----------------------------
-    // Game state
-    // -----------------------------
-    const DIRECTION = {
-      LEFT:  { x: -1, y: 0 },
-      RIGHT: { x:  1, y: 0 },
-      UP:    { x:  0, y: -1 },
-      DOWN:  { x:  0, y:  1 }
-    };
-
-    // Snake is HEAD-FIRST: snake[0] is head
-    let snake;
-    let direction;
-    let pendingDirection;
-    let food;
-    let score;
-    let gameState = "start"; // "start" | "playing" | "paused" | "dead"
-    let lastTickTime = 0;
-    let tickId = null;
-
-    function resetGame() {
-      const START_ROW = 15;
-      const startX = Math.floor(GRID_COLS / 2) - 2;
-
-      snake = [
-        { x: startX + 0, y: START_ROW }, // head (leftmost)
-        { x: startX + 1, y: START_ROW },
-        { x: startX + 2, y: START_ROW },
-        { x: startX + 3, y: START_ROW },
-        { x: startX + 4, y: START_ROW }
-      ];
-
-      direction = DIRECTION.LEFT;
-      pendingDirection = DIRECTION.LEFT;
-      score = 0;
-      placeFood();
-    }
-
-    function placeFood() {
-      while (true) {
-        const x = Math.floor(Math.random() * GRID_COLS);
-        const y = Math.floor(Math.random() * GRID_ROWS);
-        const onSnake = snake.some((seg) => seg.x === x && seg.y === y);
-        if (!onSnake) {
-          food = { x, y };
-          return;
-        }
-      }
-    }
-
-    // -----------------------------
-    // Input handling
-    // -----------------------------
-    function setDirectionFromKey(key) {
-      if (key === " ") {
-        if (gameState === "start") {
-          startGame();
-          return;
-        }
-        if (gameState === "dead") {
-          restartAfterDeath();
-          return;
-        }
-        if (gameState === "playing") {
-          pauseGame();
-          return;
-        }
-        if (gameState === "paused") {
-          resumeGame();
-          return;
-        }
-      }
-
-      if (gameState !== "playing") return;
-
-      if (key === "ArrowUp" && direction !== DIRECTION.DOWN) {
-        pendingDirection = DIRECTION.UP;
-      } else if (key === "ArrowDown" && direction !== DIRECTION.UP) {
-        pendingDirection = DIRECTION.DOWN;
-      } else if (key === "ArrowLeft" && direction !== DIRECTION.RIGHT) {
-        pendingDirection = DIRECTION.LEFT;
-      } else if (key === "ArrowRight" && direction !== DIRECTION.LEFT) {
-        pendingDirection = DIRECTION.RIGHT;
-      }
-    }
-
-    window.addEventListener(
-      "keydown",
-      (e) => {
-        if (
-          e.key === "ArrowUp" ||
-          e.key === "ArrowDown" ||
-          e.key === "ArrowLeft" ||
-          e.key === "ArrowRight" ||
-          e.key === " "
-        ) {
-          e.preventDefault();
-          setDirectionFromKey(e.key);
-        }
-      },
-      { passive: false }
-    );
-
-  // Touch controls (more sensitive)
-const SWIPE_THRESHOLD = 4;      // base distance in px
-const QUICK_SWIPE_TIME = 120;   // ms. Fast swipes can be a bit shorter.
-const QUICK_SWIPE_MIN = 3;      // px for a very fast swipe
-
-let touchStartX = null;
-let touchStartY = null;
-let touchStartTime = null;
-
-canvas.addEventListener(
-  "touchstart",
-  (e) => {
-    if (e.touches.length > 0) {
-      const t = e.touches[0];
-      touchStartX = t.clientX;
-      touchStartY = t.clientY;
-      touchStartTime = performance.now();
-
-      if (gameState === "start") {
-        startGame();
-      } else if (gameState === "dead") {
-        restartAfterDeath();
-      }
-    }
-    e.preventDefault();
-  },
-  { passive: false }
-);
-
-canvas.addEventListener(
-  "touchmove",
-  (e) => {
-    if (
-      e.touches.length > 0 &&
-      touchStartX != null &&
-      touchStartY != null
-    ) {
-      const t = e.touches[0];
-      const dx = t.clientX - touchStartX;
-      const dy = t.clientY - touchStartY;
-
-      const absX = Math.abs(dx);
-      const absY = Math.abs(dy);
-
-      const dt = performance.now() - (touchStartTime || 0);
-      const fastSwipe =
-        dt < QUICK_SWIPE_TIME &&
-        (absX > QUICK_SWIPE_MIN || absY > QUICK_SWIPE_MIN);
-
-      const threshold = fastSwipe ? QUICK_SWIPE_MIN : SWIPE_THRESHOLD;
-
-      if (absX > absY) {
-        // horizontal swipe
-        if (dx > threshold && direction !== DIRECTION.LEFT) {
-          pendingDirection = DIRECTION.RIGHT;
-        } else if (dx < -threshold && direction !== DIRECTION.RIGHT) {
-          pendingDirection = DIRECTION.LEFT;
-        }
-      } else {
-        // vertical swipe
-        if (dy > threshold && direction !== DIRECTION.UP) {
-          pendingDirection = DIRECTION.DOWN;
-        } else if (dy < -threshold && direction !== DIRECTION.DOWN) {
-          pendingDirection = DIRECTION.UP;
-        }
-      }
-    }
-    e.preventDefault();
-  },
-  { passive: false }
-);
-
-canvas.addEventListener(
-  "touchend",
-  (e) => {
-    touchStartX = null;
-    touchStartY = null;
-    touchStartTime = null;
-    e.preventDefault();
-  },
-  { passive: false }
-);
-
-
-    // -----------------------------
-    // Game loop
-    // -----------------------------
-    function startGame() {
-      if (gameState === "playing") return;
-      resetGame();
-      gameState = "playing";
-      document.body.classList.add("playing");
-
-      if (!music.paused) {
-        music.pause();
-      }
-      music.currentTime = 0;
-      music.play().catch(() => {});
-
-      lastTickTime = performance.now() + START_DELAY_MS;
-      if (!tickId) {
-        tickId = requestAnimationFrame(tick);
-      }
-    }
-
-    function restartAfterDeath() {
-      resetGame();
-      gameState = "playing";
-      document.body.classList.add("playing");
-
-      if (!music.paused) {
-        music.pause();
-      }
-      music.currentTime = 0;
-      music.play().catch(() => {});
-
-      lastTickTime = performance.now() + START_DELAY_MS;
-    }
-
-    function pauseGame() {
-      gameState = "paused";
-    }
-
-    function resumeGame() {
-      gameState = "playing";
-      lastTickTime = performance.now();
-    }
-
-    function tick(timestamp) {
-      if (!lastTickTime) {
-        lastTickTime = timestamp;
-      }
-
-      const delta = timestamp - lastTickTime;
-      if (delta >= TICK_MS) {
-        update();
-        lastTickTime = timestamp;
-      }
-
-      draw();
-      tickId = requestAnimationFrame(tick);
-    }
-
-    function update() {
-      if (gameState !== "playing") return;
-
-      direction = pendingDirection;
-
-      const head = snake[0];
-      const newHead = {
-        x: head.x + direction.x,
-        y: head.y + direction.y
-      };
-
-      // Wall collision
-      if (
-        newHead.x < 0 ||
-        newHead.x >= GRID_COLS ||
-        newHead.y < 0 ||
-        newHead.y >= GRID_ROWS
-      ) {
-        handleDeath();
-        return;
-      }
-
-      // Self collision
-      if (snake.some((seg) => seg.x === newHead.x && seg.y === newHead.y)) {
-        handleDeath();
-        return;
-      }
-
-      const willGrow = newHead.x === food.x && newHead.y === food.y;
-
-      snake.unshift(newHead);
-
-      if (willGrow) {
-        score += 1;
-        placeFood();
-      } else {
-        snake.pop();
-      }
-    }
-
-    function handleDeath() {
-      gameState = "dead";
-      document.body.classList.remove("playing");
-
-      music.pause();
-      music.currentTime = 0;
-      deathSound.currentTime = 0;
-      deathSound.play().catch(() => {});
-    }
-
-    // -----------------------------
-    // Drawing helpers
-    // -----------------------------
-    function clearCanvas() {
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    }
-
-    function drawBackground() {
-      ctx.drawImage(bgImage, 0, 0, GAME_WIDTH, GAME_HEIGHT);
-    }
-
-    function drawSnake() {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#000000";
-
-      // body (tail to just before head)
-      for (let i = snake.length - 1; i > 0; i--) {
-        const seg = snake[i];
-        drawCell(seg.x, seg.y, false);
-      }
-
-      // head
-      const head = snake[0];
-      drawCell(head.x, head.y, true);
-    }
-
-    function drawCell(gridX, gridY, isHead) {
-      const px = gridX * CELL_SIZE;
-      const py = gridY * CELL_SIZE;
-
-      ctx.fillStyle = "#7cf35b";
-      ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-
-      ctx.strokeStyle = "#000000";
-      ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
-
-      if (isHead) {
-        drawHeadEyes(px, py);
-      }
-    }
-
-    // Constant top-down eyes
-    function drawHeadEyes(px, py) {
-      const eyeSize = Math.floor(CELL_SIZE / 5);
-      const offsetX = Math.floor(CELL_SIZE / 4);
-      const offsetY = Math.floor(CELL_SIZE / 6);
-
-      ctx.fillStyle = "#000000";
-
-      // Left eye
-      ctx.fillRect(px + offsetX, py + offsetY, eyeSize, eyeSize);
-
-      // Right eye
-      ctx.fillRect(
-        px + CELL_SIZE - offsetX - eyeSize,
-        py + offsetY,
-        eyeSize,
-        eyeSize
-      );
-    }
-
-    function drawFood() {
-      ctx.fillStyle = "#ff6b6b";
-      const px = food.x * CELL_SIZE;
-      const py = food.y * CELL_SIZE;
-      ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-      ctx.strokeStyle = "#000000";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(px, py, CELL_SIZE, CELL_SIZE);
-    }
-
-    function drawScore() {
-      ctx.fillStyle = "#000000";
-      ctx.font = "18px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.textBaseline = "top";
-      ctx.textAlign = "left";
-      ctx.fillText("Score: " + score, 8, 14);
-    }
-
-    function drawStartOverlay() {
-      if (logoImage.complete) {
-        const logoWidth = GAME_WIDTH * 0.7;
-        const ratio = logoImage.height / logoImage.width;
-        const logoHeight = logoWidth * ratio;
-        const logoX = (GAME_WIDTH - logoWidth) / 2;
-        const logoY = Math.floor(GAME_HEIGHT * 0.18);
-        ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight);
-      }
-
-      ctx.fillStyle = "#000000";
-      ctx.font = "20px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      ctx.fillText(
-        "Press Space or Arrow key to start",
-        GAME_WIDTH / 2,
-        GAME_HEIGHT * 0.65
-      );
-      ctx.fillText(
-        "On mobile: swipe to move",
-        GAME_WIDTH / 2,
-        GAME_HEIGHT * 0.72
-      );
-    }
-
-    function drawDeathOverlay() {
-      if (deathImage.complete && deathImage.width && deathImage.height) {
-        const imgRatio = deathImage.width / deathImage.height;
-        const canvasRatio = GAME_WIDTH / GAME_HEIGHT;
-
-        let drawWidth;
-        let drawHeight;
-
-        if (imgRatio > canvasRatio) {
-          drawWidth = GAME_WIDTH;
-          drawHeight = GAME_WIDTH / imgRatio;
-        } else {
-          drawHeight = GAME_HEIGHT;
-          drawWidth = GAME_HEIGHT * imgRatio;
-        }
-
-        const drawX = (GAME_WIDTH - drawWidth) / 2;
-        const drawY = (GAME_HEIGHT - drawHeight) / 2;
-
-        ctx.drawImage(deathImage, drawX, drawY, drawWidth, drawHeight);
-      }
-      // Text is baked into the image
-    }
-
-    function drawPausedOverlay() {
-      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
-      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "18px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("Paused", GAME_WIDTH / 2, GAME_HEIGHT * 0.5);
-      ctx.font = "12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.fillText("Press Space to resume", GAME_WIDTH / 2, GAME_HEIGHT * 0.57);
-    }
-
-    function draw() {
-      clearCanvas();
-      drawBackground();
-      drawFood();
-      drawSnake();
-      drawScore();
-
-      if (gameState === "start") {
-        drawStartOverlay();
-      } else if (gameState === "dead") {
-        drawDeathOverlay();
-      } else if (gameState === "paused") {
-        drawPausedOverlay();
-      }
-    }
-
-    // -----------------------------
-    // Newsletter interaction
-    // -----------------------------
-    document.addEventListener("DOMContentLoaded", () => {
-      const form = document.getElementById("newsletter-form");
-      if (!form) return;
-
-      const emailInput = document.getElementById("newsletter-email");
-      const submitButton = form.querySelector('button[type="submit"]');
-      const successEl = document.getElementById("newsletter-success");
-      const errorEl = document.getElementById("newsletter-error");
-
-      const originalButtonText = submitButton.textContent;
-
-      function showFeedback(target) {
-        [successEl, errorEl].forEach((el) => {
-          if (!el) return;
-          if (el === target) {
-            el.classList.add("visible");
-          } else {
-            el.classList.remove("visible");
-          }
-        });
-      }
-
-      form.addEventListener("submit", (e) => {
-        const email = emailInput.value.trim();
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        // Invalid email: stop, show error
-        if (!emailPattern.test(email)) {
-          e.preventDefault();
-          showFeedback(errorEl);
-          emailInput.focus();
-          return;
-        }
-
-        // Valid email: let the form submit to Buttondown, but show UI state
-        showFeedback(null);
-        submitButton.disabled = true;
-        submitButton.textContent = "Sending…";
-
-        setTimeout(() => {
-          submitButton.disabled = false;
-          submitButton.textContent = originalButtonText;
-          showFeedback(successEl);
-        }, 1000);
-      });
-
-      // Hide error when user starts typing again
-      emailInput.addEventListener("input", () => {
-        if (errorEl) errorEl.classList.remove("visible");
-      });
-    });
-
-    // -----------------------------
-    // Kick off
-    // -----------------------------
-    resetGame();
-    draw();
-
-    canvas.addEventListener("click", () => {
-      canvas.focus();
-    });
-  </script>
 </body>
 </html>
