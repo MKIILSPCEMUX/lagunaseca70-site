@@ -26,24 +26,21 @@
 
   <style>
     :root {
-      --bg-gold: #e4b93b;
       --cabinet-purple: #210c3b;
-      --cabinet-purple-inner: #18072c;
       --button-blue: #13b0e5;
       --button-pink: #ff3a7f;
       --text-light: #ffffff;
+      --link-pink: #ff62a5;
       --snake-body: #7cf35b;
-      --snake-border: #000000;
       --food-color: #ff6b6b;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     html, body { height: 100%; width: 100%; }
 
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg-gold);
+      font-family: "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+      background: #1a0b2e;
       color: var(--text-light);
       display: flex;
       justify-content: center;
@@ -51,7 +48,6 @@
       min-height: 100vh;
       overflow-x: hidden;
     }
-
     /* Disable page scroll during play so arrows do not scroll */
     body.playing { overflow: hidden; }
 
@@ -61,222 +57,229 @@
       background: url("/game/background.jpg") center center / cover no-repeat;
       z-index: -1;
     }
+    .background::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 30%, rgba(20,7,40,0.35), rgba(12,3,24,0.72) 82%);
+    }
 
-    .cabinet-wrapper {
+    .wrap {
       width: 100%;
       max-width: 430px;
-      padding: 16px 8px 24px;
+      margin: auto;
+      padding: 18px 10px 26px;
       display: flex;
       justify-content: center;
     }
 
+    /* THE CABINET (Dark Star chrome, original purple colours) */
     .cabinet {
+      position: relative;
       width: 100%;
-      background: radial-gradient(circle at top, #3a1c6f 0, var(--cabinet-purple) 45%, #120320 100%);
-      border-radius: 32px;
+      background: radial-gradient(circle at 50% 0%, #3a1c6f 0, var(--cabinet-purple) 46%, #120320 100%);
+      border-radius: 20px 20px 26px 26px;
+      padding: 20px 18px 16px;
       box-shadow:
-        0 20px 40px rgba(0, 0, 0, 0.6),
-        0 0 0 2px rgba(255, 255, 255, 0.08);
-      padding: 24px 20px 8px;
+        0 22px 50px rgba(0,0,0,0.72),
+        inset 0 1px 0 rgba(255,255,255,0.14),
+        inset 0 -3px 8px rgba(0,0,0,0.45);
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .cabinet::before {
+      content: "";
+      position: absolute;
+      inset: 8px 8px 10px 8px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.10);
+      pointer-events: none;
+    }
+    .screw {
+      position: absolute;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #d3d3da, #6b6b73 60%, #33333a);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
+    }
+    .screw.tl { top: 14px; left: 14px; }
+    .screw.tr { top: 14px; right: 14px; }
+    .screw.bl { bottom: 16px; left: 14px; }
+    .screw.br { bottom: 16px; right: 14px; }
+
+    /* Header */
+    .hull-head {
       display: flex;
       flex-direction: column;
       align-items: center;
+      padding: 2px 6px 10px;
     }
-
-    .logo { width: 100%; text-align: center; margin-bottom: 8px; }
-    .logo img {
-      width: 90%;
-      max-width: 320px;
-      image-rendering: pixelated;
+    .logo {
+      width: 78%;
+      max-width: 300px;
+      height: auto;
       display: block;
-      margin: 0 auto;
+      image-rendering: pixelated;
+      margin: 2px auto 0;
     }
-
-    .subtitle {
-      font-size: 10px;
-      letter-spacing: 0.28em;
+    .hull-caption {
+      margin-top: 10px;
+      font-size: 9px;
+      letter-spacing: 0.22em;
       text-transform: uppercase;
+      font-weight: 700;
+      color: rgba(255,255,255,0.72);
       text-align: center;
-      color: rgba(255, 255, 255, 0.78);
-      margin-bottom: 18px;
     }
 
-    .screen-shell {
-      width: 100%;
-      background: linear-gradient(135deg, #19062a, #0c0216);
-      border-radius: 18px;
-      padding: 10px;
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-      margin-bottom: 18px;
+    /* SCREEN BEZEL */
+    .bezel {
+      background: linear-gradient(160deg, #1a0730, #0a0216);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow:
+        inset 0 2px 6px rgba(0,0,0,0.7),
+        inset 0 0 0 1px rgba(255,255,255,0.06);
     }
-
-    .screen-inner {
-      width: 100%;
-      background: #000;
-      border-radius: 10px;
-      padding: 6px;
-      box-shadow: inset 0 0 0 2px #000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    /* aspect-ratio matches the canvas grid (19x34) so it fills the width with no side gaps */
+    /* aspect-ratio matches the 19x34 canvas grid so it fills the width with no side gaps */
     .screen-viewport {
+      position: relative;
       width: 100%;
       aspect-ratio: 19 / 34;
-      max-height: calc(100vh - 250px);
+      max-height: 90vh;
       display: flex;
       justify-content: center;
       align-items: center;
       background: #000;
+      border-radius: 8px;
       overflow: hidden;
     }
-
     #gameCanvas {
       display: block;
       width: 100%;
       height: 100%;
       image-rendering: pixelated;
-      border: 3px solid #000000;
-      background: #000000;
+      background: #000;
     }
 
-    .buttons-row {
+    /* SWITCHES (Dark Star layout, original blue/pink colours) */
+    .switches {
       display: flex;
-      justify-content: center;
-      gap: 18px;
-      margin-top: 8px;
-      margin-bottom: 10px;
-      width: 100%;
+      gap: 12px;
+      margin: 14px 4px 8px;
     }
-
-    .btn {
+    .switch {
       flex: 1;
-      max-width: 150px;
-      padding: 10px 14px;
-      border-radius: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 10px;
+      border-radius: 24px;
       border: none;
       cursor: pointer;
+      text-decoration: none;
       font-size: 11px;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      font-weight: 700;
-      color: #04101f;
-      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.38);
-      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
-    }
-
-    .btn-blue { background: var(--button-blue); }
-    .btn-pink { background: var(--button-pink); }
-
-    .btn:hover { transform: translateY(-1px); filter: brightness(1.03); box-shadow: 0 10px 18px rgba(0, 0, 0, 0.5); }
-    .btn:active { transform: translateY(1px); box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4); }
-
-    .footer {
-      text-align: center;
-      font-size: 9px;
-      line-height: 1.5;
-      color: rgba(255, 255, 255, 0.8);
-    }
-    .footer a { color: #ff62a5; text-decoration: none; }
-    .footer a:hover { text-decoration: underline; }
-
-    /* Newsletter form */
-    .newsletter { margin-top: 6px; text-align: center; }
-    .newsletter-label { display: block; margin-bottom: 4px; font-size: 9px; opacity: 0.8; letter-spacing: 0.03em; }
-    .newsletter-row { display: flex; gap: 6px; justify-content: center; }
-    .newsletter-row input[type="email"] { flex: 1; max-width: 150px; padding: 5px 8px; border-radius: 18px; border: none; font-size: 10.5px; height: 28px; }
-    .newsletter-row button {
-      padding: 5px 12px;
-      border-radius: 18px;
-      border: none;
-      font-size: 10px;
-      font-weight: 600;
+      font-weight: 800;
       letter-spacing: 0.16em;
       text-transform: uppercase;
-      cursor: pointer;
-      background: #ffffff;
-      color: #210c3b;
-      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+      color: #06121f;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.35);
       transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
-      height: 28px;
     }
-    .newsletter-row button:hover { transform: translateY(-1px); filter: brightness(1.04); box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45); }
-    .newsletter-row button:active { transform: translateY(1px); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4); }
-    .newsletter-row button:disabled { opacity: 0.6; cursor: default; transform: none; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35); }
+    .switch.blue { background: var(--button-blue); }
+    .switch.pink { background: var(--button-pink); color: #fff; }
+    .switch:hover { transform: translateY(-1px); filter: brightness(1.04); }
+    .switch:active { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0,0,0,0.4); }
+    .led { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.92); box-shadow: 0 0 6px rgba(255,255,255,0.85); }
+
+    /* mailing list */
+    .ds-signup { display: flex; gap: 8px; justify-content: center; margin: 4px 6px 6px; }
+    .ds-signup input { flex: 1; max-width: 190px; height: 32px; padding: 5px 12px; border-radius: 16px; border: none; background: #fff; color: #210c3b; font-size: 12px; }
+    .ds-signup button { height: 32px; padding: 5px 16px; border-radius: 16px; border: none; background: #fff; color: #210c3b; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; cursor: pointer; box-shadow: 0 3px 8px rgba(0,0,0,0.35); }
+    .ds-signup button:hover { filter: brightness(0.94); }
+    .ds-signup button:disabled { opacity: 0.6; cursor: default; }
 
     .newsletter-feedback {
       text-align: center;
       font-size: 10px;
-      margin-top: 4px;
+      margin: 0 6px;
+      max-height: 0;
       opacity: 0;
-      transform: translateY(4px);
-      transition: opacity 200ms ease-out, transform 200ms ease-out;
-      pointer-events: none;
+      overflow: hidden;
+      transition: opacity 200ms ease-out, max-height 200ms ease-out;
+      font-weight: 700;
     }
-    .newsletter-feedback.visible { opacity: 1; transform: translateY(0); }
+    .newsletter-feedback.visible { opacity: 1; max-height: 40px; margin-top: 4px; }
     #newsletter-success { color: var(--snake-body); }
     #newsletter-error { color: var(--food-color); }
 
+    .hull-foot {
+      text-align: center;
+      font-size: 8.5px;
+      line-height: 1.7;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.72);
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 8px 4px 2px;
+    }
+    .hull-foot a { color: var(--link-pink); text-decoration: none; }
+
     @media (max-width: 480px) {
-      .cabinet-wrapper { padding: 8px 4px 16px; }
-      .cabinet { padding: 20px 14px 6px; border-radius: 26px; }
-      .screen-shell { padding: 8px; }
-      .screen-inner { padding: 4px; }
-      .buttons-row { gap: 10px; }
+      .wrap { padding: 10px 6px 18px; }
+      .cabinet { padding: 16px 13px 12px; }
     }
   </style>
 </head>
 <body>
   <div class="background"></div>
 
-  <div class="cabinet-wrapper">
+  <div class="wrap">
     <div class="cabinet">
-      <div class="logo">
-        <img src="/game/laguna-logo.png" alt="Laguna Sneca logo" />
-      </div>
-      <div class="subtitle">A MINI GAME BY LAGUNA SECA</div>
+      <span class="screw tl"></span><span class="screw tr"></span>
+      <span class="screw bl"></span><span class="screw br"></span>
 
-      <div class="screen-shell">
-        <div class="screen-inner">
-          <div class="screen-viewport">
-            <canvas id="gameCanvas"></canvas>
-          </div>
+      <div class="hull-head">
+        <img class="logo" src="/game/laguna-logo.png" alt="Laguna Sneca" />
+        <div class="hull-caption">A mini game by Laguna Seca</div>
+      </div>
+
+      <div class="bezel">
+        <div class="screen-viewport">
+          <canvas id="gameCanvas"></canvas>
         </div>
       </div>
 
-      <div class="buttons-row">
-        <button class="btn btn-blue" onclick="window.open('https://lagunaseca.bandcamp.com/track/laguna-sneca', '_blank')">Bandcamp</button>
-        <button class="btn btn-pink" onclick="window.location.href='/darkstar/'">The Dark Star</button>
+      <div class="switches">
+        <a class="switch blue" href="https://lagunaseca.bandcamp.com/track/laguna-sneca" target="_blank" rel="noopener noreferrer">
+          <span class="led"></span>Bandcamp
+        </a>
+        <a class="switch pink" href="/darkstar/">
+          <span class="led"></span>The Dark Star
+        </a>
       </div>
 
-      <div class="footer">
-        Game, music and design by Laguna Seca. Snake locked to 105&nbsp;BPM.<br />
-        Contact:
-        <a href="mailto:contact@lagunaseca70.com">contact@lagunaseca70.com</a>
-        &nbsp;|&nbsp;
-        <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
-      </div>
-
-      <!-- Newsletter form -->
       <form
         id="newsletter-form"
-        class="newsletter"
+        class="ds-signup"
         action="https://buttondown.com/api/emails/embed-subscribe/LagunaSeca70"
         method="post"
         target="popupwindow"
         onsubmit="window.open('https://buttondown.com/LagunaSeca70','popupwindow')"
       >
-        <label for="newsletter-email" class="newsletter-label">Join the Laguna Seca mailing list:</label>
-        <div class="newsletter-row">
-          <input id="newsletter-email" type="email" name="email" required placeholder="your@email.com" />
-          <button type="submit">Join</button>
-        </div>
+        <input id="newsletter-email" type="email" name="email" required placeholder="your@email.com" aria-label="Email" />
+        <button type="submit">Join</button>
       </form>
 
-      <div id="newsletter-success" class="newsletter-feedback">&#10004; Thanks for joining! Check your inbox for confirmation.</div>
+      <div id="newsletter-success" class="newsletter-feedback">&#10004; Thanks for joining! Check your inbox to confirm.</div>
       <div id="newsletter-error" class="newsletter-feedback">Please enter a valid email address.</div>
+
+      <div class="hull-foot">
+        Laguna Sneca &middot; a beat-locked snake game, 105 BPM<br />
+        Music and design by Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact@lagunaseca70.com</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+      </div>
     </div>
   </div>
 
