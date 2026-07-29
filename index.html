@@ -55,6 +55,11 @@
     .wrap { width: 100%; max-width: 480px; margin: auto; }
 
     .head { text-align: center; margin-bottom: 26px; }
+    .wordmark {
+      width: 80%; max-width: 360px; height: auto; display: block; margin: 0 auto;
+      image-rendering: pixelated;
+      filter: drop-shadow(0 3px 12px rgba(0,0,0,0.6));
+    }
     .head h1 {
       font-size: clamp(30px, 9vw, 46px);
       font-weight: 800;
@@ -118,6 +123,12 @@
     .card.sneca:hover { border-color: rgba(255, 58, 127, 0.6); box-shadow: 0 14px 34px rgba(0,0,0,0.5), 0 0 22px rgba(255,58,127,0.22); }
     .card.sneca .card-play { color: var(--pink); }
 
+    /* Record card */
+    .card.record .thumb { background: #000; padding: 0; }
+    .card.record .thumb img { width: 100%; height: 100%; object-fit: cover; image-rendering: auto; }
+    .card.record:hover { border-color: rgba(240, 196, 122, 0.6); box-shadow: 0 14px 34px rgba(0,0,0,0.5), 0 0 22px rgba(240,196,122,0.22); }
+    .card.record .card-play { color: #f0c47a; }
+
     .foot {
       margin-top: 28px; text-align: center;
       font-size: 10px; letter-spacing: 0.1em; color: var(--dim);
@@ -146,7 +157,7 @@
 
   <div class="wrap">
     <div class="head">
-      <h1>Laguna Seca</h1>
+      <img class="wordmark" src="/laguna-wordmark.png" alt="Laguna Seca" />
       <div class="tag">Mini-game arcade</div>
     </div>
 
@@ -155,7 +166,7 @@
         <div class="thumb"><img src="/darkstar/img/darkstar_title.png" alt="The Dark Star" /></div>
         <div class="card-body">
           <div class="card-name">The Dark Star</div>
-          <div class="card-tag">Rhythm asteroids &middot; 135 BPM &middot; sound on</div>
+          <div class="card-tag">Rhythm asteroids &middot; 135 BPM</div>
           <div class="card-play">Play &#9654;</div>
         </div>
       </a>
@@ -164,8 +175,17 @@
         <div class="thumb"><img src="/game/laguna-logo.png" alt="Laguna Sneca" /></div>
         <div class="card-body">
           <div class="card-name">Laguna Sneca</div>
-          <div class="card-tag">Snake &middot; 105 BPM &middot; swipe or arrows</div>
+          <div class="card-tag">Snake &middot; 105 BPM</div>
           <div class="card-play">Play &#9654;</div>
+        </div>
+      </a>
+
+      <a class="card record" href="https://lagunaseca.bandcamp.com/album/live-from-m-sli-mountain" target="_blank" rel="noopener noreferrer">
+        <div class="thumb"><img src="/musli-mountain.jpg" alt="Live from Müsli Mountain" /></div>
+        <div class="card-body">
+          <div class="card-name">Live from Müsli Mountain</div>
+          <div class="card-tag">EP &middot; 12&Prime; vinyl + digital</div>
+          <div class="card-play">Bandcamp &#9654;</div>
         </div>
       </a>
     </div>
