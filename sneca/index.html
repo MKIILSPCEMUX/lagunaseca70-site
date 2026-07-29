@@ -340,6 +340,41 @@
     music.loop = true;
 
     const deathSound = new Audio("/game/death.wav");
+    deathSound.preload = "auto";
+
+    // Low-latency death SFX via Web Audio. An HTMLAudio element fetches/decodes
+    // on demand, so the first death can play late or be missed entirely. We decode
+    // the clip once (on the first user gesture) and fire it from a buffer instead.
+    let audioCtx = null;
+    let deathBuffer = null;
+    function initAudio() {
+      if (audioCtx) {
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        return;
+      }
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        fetch("/game/death.wav")
+          .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject()))
+          .then((b) => audioCtx.decodeAudioData(b))
+          .then((buf) => { deathBuffer = buf; })
+          .catch(() => {});
+      } catch (e) {}
+    }
+    function playDeath() {
+      if (audioCtx && deathBuffer) {
+        try {
+          if (audioCtx.state === "suspended") audioCtx.resume();
+          const s = audioCtx.createBufferSource();
+          s.buffer = deathBuffer;
+          s.connect(audioCtx.destination);
+          s.start();
+          return;
+        } catch (e) {}
+      }
+      // fallback: the HTMLAudio element
+      try { deathSound.currentTime = 0; deathSound.play().catch(() => {}); } catch (e) {}
+    }
 
     bgImage.onload = () => {
       draw();
@@ -537,6 +572,7 @@ canvas.addEventListener(
     // -----------------------------
     function startGame() {
       if (gameState === "playing") return;
+      initAudio();
       resetGame();
       gameState = "playing";
       document.body.classList.add("playing");
@@ -554,6 +590,7 @@ canvas.addEventListener(
     }
 
     function restartAfterDeath() {
+      initAudio();
       resetGame();
       gameState = "playing";
       document.body.classList.add("playing");
@@ -637,8 +674,7 @@ canvas.addEventListener(
 
       music.pause();
       music.currentTime = 0;
-      deathSound.currentTime = 0;
-      deathSound.play().catch(() => {});
+      playDeath();
     }
 
     // -----------------------------
