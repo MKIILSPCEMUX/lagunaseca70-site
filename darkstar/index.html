@@ -666,6 +666,7 @@
       const now = performance.now();
       if (now - lastShot < FIRE_MS) return;
       lastShot = now;
+      sfx('shoot_hat', 0.3); // subtle 8th-note hi-hat on each shot
       bullets.push({
         x: ship.x + Math.cos(ship.a) * ship.r,
         y: ship.y + Math.sin(ship.a) * ship.r,
@@ -693,7 +694,7 @@
       if (keys['ArrowLeft']) ship.a -= ROT;
       if (keys['ArrowRight']) ship.a += ROT;
       thrusting = !!keys['ArrowUp'];
-      if (thrusting && !wasThrust && !gameOver) sfx('ship_boost', 0.9); // one boost blip per press
+      if (thrusting && !wasThrust && !gameOver) sfx('ship_boost', 0.6); // one boost blip per press
       wasThrust = thrusting;
       if (thrusting) { ship.vx += Math.cos(ship.a) * THRUST; ship.vy += Math.sin(ship.a) * THRUST; }
       if (keys['ArrowDown']) { ship.vx *= 0.93; ship.vy *= 0.93; }
