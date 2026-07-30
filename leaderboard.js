@@ -54,8 +54,9 @@
       '.lb-inis input:focus{outline:2px solid var(--lb-accent);outline-offset:1px;}' +
       '.lb-field{width:100%;height:38px;padding:6px 12px;border-radius:19px;border:1px solid rgba(255,255,255,0.2);' +
       'background:#f7f6f2;color:#111;font-size:13px;margin-bottom:10px;}' +
-      '.lb-opt{display:flex;align-items:flex-start;gap:8px;font-size:10.5px;line-height:1.4;opacity:0.85;margin-bottom:14px;cursor:pointer;}' +
+      '.lb-opt{display:flex;align-items:flex-start;gap:8px;font-size:10.5px;line-height:1.4;opacity:0.85;margin-bottom:10px;cursor:pointer;}' +
       '.lb-opt input{margin-top:1px;}' +
+      '.lb-tip{font-size:10px;text-align:center;opacity:0.6;letter-spacing:0.04em;margin-bottom:14px;}' +
       '.lb-actions{display:flex;gap:10px;}' +
       '.lb-btn{flex:1;height:40px;border:none;border-radius:20px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;' +
       'font-size:12px;cursor:pointer;}' +
@@ -136,6 +137,7 @@
       '<input maxlength="1" inputmode="latin" aria-label="Initial 3"></div>' +
       '<input class="lb-field lb-email" type="email" placeholder="Email (optional)" aria-label="Email">' +
       '<label class="lb-opt"><input type="checkbox" class="lb-join"><span>Add me to the Laguna Seca mailing list</span></label>' +
+      '<div class="lb-tip">Screenshot your score to share it.</div>' +
       '<div class="lb-actions"><button class="lb-btn lb-go">Submit</button><button class="lb-btn lb-skip">Skip</button></div>' +
       '<div class="lb-msg"></div></div>';
     document.body.appendChild(modal);

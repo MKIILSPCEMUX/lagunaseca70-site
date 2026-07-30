@@ -19,7 +19,7 @@
 const GAMES = ['darkstar', 'sneca'];
 const CAP = { darkstar: 200000, sneca: 800 };   // reject scores above a plausible ceiling
 const PAD = 7;                                    // width for the sortable inverse-score key
-const DEFAULT_CLOSE = '2026-08-13T23:00:00Z';     // <-- fallback; override with COMPETITION_CLOSE
+const DEFAULT_CLOSE = '2026-08-14T19:00:00Z';     // 8pm UK time (BST) on Fri 14 Aug 2026; override with COMPETITION_CLOSE
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
