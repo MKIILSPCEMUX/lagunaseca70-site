@@ -27,6 +27,20 @@
     });
   }
 
+  // Subscribe via Buttondown's free embed endpoint (same one the cabinet sign-up
+  // form uses). The API route needs a paid plan; this one doesn't. Fire-and-forget:
+  // Buttondown sends its own double opt-in confirmation email.
+  function subscribeEmbed(email) {
+    try {
+      fetch('https://buttondown.com/api/emails/embed-subscribe/LagunaSeca70', {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: 'email=' + encodeURIComponent(email),
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   function injectStyle() {
     if (document.getElementById('lb-style')) return;
     var css =
@@ -243,6 +257,8 @@
     busy = true;
     modal.querySelector('.lb-go').disabled = true;
     msg.className = 'lb-msg'; msg.textContent = 'Saving...';
+
+    if (joinList && email) subscribeEmbed(email);
 
     fetch(API, {
       method: 'POST',
