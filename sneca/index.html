@@ -227,6 +227,16 @@
     }
     .hull-foot a { color: var(--link-pink); text-decoration: none; }
 
+    /* high score board */
+    .hiscore-panel {
+      background: linear-gradient(160deg, #1a0730, #0a0216);
+      border: 1px solid rgba(255,58,127,0.28);
+      border-radius: 12px;
+      padding: 11px 13px;
+      margin: 12px 2px 2px;
+      min-height: 44px;
+    }
+
     @media (max-width: 480px) {
       .wrap { padding: 10px 6px 18px; }
       .cabinet { padding: 16px 13px 12px; }
@@ -251,6 +261,8 @@
           <canvas id="gameCanvas"></canvas>
         </div>
       </div>
+
+      <div id="hiscore-panel" class="hiscore-panel"></div>
 
       <div class="switches">
         <a class="switch blue" href="https://lagunaseca.bandcamp.com/track/laguna-sneca" target="_blank" rel="noopener noreferrer">
@@ -283,7 +295,11 @@
     </div>
   </div>
 
+  <script src="/leaderboard.js"></script>
   <script>
+    // high score board
+    if (window.Leaderboard) Leaderboard.init('sneca', { panel: '#hiscore-panel', accent: '#ff3a7f', prize: false });
+
     // -----------------------------
     // Core settings
     // -----------------------------
@@ -675,6 +691,8 @@ canvas.addEventListener(
       music.pause();
       music.currentTime = 0;
       playDeath();
+
+      if (window.Leaderboard) Leaderboard.onGameOver(score);
     }
 
     // -----------------------------

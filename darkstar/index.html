@@ -371,6 +371,16 @@
     .tc-fire { width: 60px; height: 60px; font-size: 11px; letter-spacing: 0.1em; border-color: rgba(255, 79, 163, 0.6); background: rgba(255, 79, 163, 0.12); }
     .tc-fire:active { background: rgba(255, 79, 163, 0.34); }
 
+    /* high score board */
+    .hiscore-panel {
+      background: linear-gradient(160deg, #0b2011, #04070c);
+      border: 1px solid rgba(72,216,107,0.25);
+      border-radius: 12px;
+      padding: 11px 13px;
+      margin: 12px 2px 2px;
+      min-height: 44px;
+    }
+
     @media (max-width: 480px) {
       .wrap { padding: 10px 6px 18px; }
       .cabinet { padding: 16px 13px 12px; }
@@ -431,6 +441,8 @@
         </div>
       </div>
 
+      <div id="hiscore-panel" class="hiscore-panel"></div>
+
       <div class="switches">
         <a class="switch" href="https://lagunaseca.bandcamp.com/album/live-from-m-sli-mountain" target="_blank" rel="noopener noreferrer">
           <span class="led amber"></span>Bandcamp
@@ -452,8 +464,11 @@
       </div>
     </div>
   </div>
+  <script src="/leaderboard.js"></script>
   <script>
   (function () {
+    // high score board (prize run)
+    if (window.Leaderboard) Leaderboard.init('darkstar', { panel: '#hiscore-panel', accent: '#48d86b', prize: true });
     const cv = document.getElementById('game');
     const ctx = cv.getContext('2d');
     const hint = document.getElementById('startHint');
@@ -748,7 +763,7 @@
             integrity--; invuln = 95; hitFlash = 1; sfx('ship_hit', 2.2);
             const ka = Math.atan2(ship.y - a.y, ship.x - a.x);
             ship.vx += Math.cos(ka) * 3; ship.vy += Math.sin(ka) * 3;
-            if (integrity <= 0) { gameOver = true; overEl.classList.remove('hidden'); sfx('game_over'); }
+            if (integrity <= 0) { gameOver = true; overEl.classList.remove('hidden'); sfx('game_over'); if (window.Leaderboard) Leaderboard.onGameOver(score); }
             break;
           }
         }
