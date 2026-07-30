@@ -53,7 +53,14 @@
       align-items: flex-start;
       min-height: 100vh;
       overflow-x: hidden;
+      -webkit-user-select: none; user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
     }
+    /* keep the email field usable */
+    input, textarea { -webkit-user-select: text; user-select: text; }
+    /* the game screen shouldn't pan, zoom or highlight on touch */
+    .scanner { touch-action: none; }
 
     /* NASA flare world, outside the ship */
     .background {
@@ -494,7 +501,7 @@
     const bullets = [];
     let started = false, thrusting = false, lastShot = 0;
 
-    const THRUST = 0.16, FRICTION = 0.99, MAXSPD = 4.4, ROT = 0.078,
+    const THRUST = 0.16, FRICTION = 0.99, MAXSPD = 4.4, ROT = 0.06,
           BULLET_SPD = 6, FIRE_MS = 170, BULLET_LIFE = 68;
 
     // --- asteroids + game state ---
@@ -681,7 +688,7 @@
       const now = performance.now();
       if (now - lastShot < FIRE_MS) return;
       lastShot = now;
-      sfx('shoot_hat', 0.3); // subtle 8th-note hi-hat on each shot
+      sfx('shoot_hat', 0.45); // 8th-note hi-hat on each shot
       bullets.push({
         x: ship.x + Math.cos(ship.a) * ship.r,
         y: ship.y + Math.sin(ship.a) * ship.r,
@@ -709,7 +716,7 @@
       if (keys['ArrowLeft']) ship.a -= ROT;
       if (keys['ArrowRight']) ship.a += ROT;
       thrusting = !!keys['ArrowUp'];
-      if (thrusting && !wasThrust && !gameOver) sfx('ship_boost', 0.6); // one boost blip per press
+      if (thrusting && !wasThrust && !gameOver) sfx('ship_boost', 0.75); // one boost blip per press
       wasThrust = thrusting;
       if (thrusting) { ship.vx += Math.cos(ship.a) * THRUST; ship.vy += Math.sin(ship.a) * THRUST; }
       if (keys['ArrowDown']) { ship.vx *= 0.93; ship.vy *= 0.93; }
@@ -751,7 +758,7 @@
         const a = asteroids[i]; let hit = false;
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.45); killFlash = 1; hit = true; break; }
+          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.6); killFlash = 1; hit = true; break; }
         }
         if (hit) splitAsteroid(i);
       }
@@ -838,7 +845,7 @@
         const a = asteroids[i], px = a.x - x0, py = a.y - y0;
         const t = px * dx + py * dy;
         if (t < 0) continue;                       // behind the ship
-        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.45); killFlash = 1; asteroids.splice(i, 1); }
+        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.6); killFlash = 1; asteroids.splice(i, 1); }
       }
     }
     function drawLaser() {

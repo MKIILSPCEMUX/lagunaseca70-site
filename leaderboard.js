@@ -12,7 +12,7 @@
 (function () {
   var API = '/api/scores';
   var cfg = { game: 'darkstar', accent: '#48d86b', prize: false, screen: null, onReplay: null };
-  var state = { closesAt: null, closed: false, scores: [], myTs: null };
+  var state = { closesAt: null, closed: false, scores: [], myTs: null, myEntry: null };
   var modal = null, overlay = null, keyCatcher = null;
 
   function el(tag, cls, html) {
@@ -60,7 +60,8 @@
       '.lb-msg.err{color:#ff6b6b;}.lb-msg.ok{color:var(--lb-accent);}' +
       /* on-screen board overlay */
       '.lb-screen{position:absolute;inset:0;z-index:14;display:flex;flex-direction:column;padding:16px 16px 14px;' +
-      'background:rgba(4,6,10,0.92);color:#f2efe8;font-family:"Arial Narrow","Helvetica Neue",Arial,sans-serif;cursor:pointer;}' +
+      'background:rgba(4,6,10,0.92);color:#f2efe8;font-family:"Arial Narrow","Helvetica Neue",Arial,sans-serif;cursor:pointer;' +
+      'touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}' +
       '.lb-screen[hidden]{display:none;}' +
       '.lb-s-title{font-size:13px;font-weight:800;letter-spacing:0.26em;text-transform:uppercase;color:var(--lb-accent);text-align:center;}' +
       '.lb-s-sub{font-size:9px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.7;text-align:center;margin:3px 0 12px;}' +
@@ -86,11 +87,25 @@
     return 'Prize closes in ' + h + 'h ' + m + 'm';
   }
 
+  // Keep the player's own just-submitted entry visible even if KV's list read
+  // hasn't caught up yet (KV list is eventually consistent, so a fresh entry can
+  // be missing from the next read for a moment).
+  function mergeMine() {
+    if (!state.myEntry) return;
+    var has = state.scores.some(function (r) { return r.ts === state.myEntry.ts; });
+    if (!has) {
+      state.scores.push({ initials: state.myEntry.initials, score: state.myEntry.score, ts: state.myEntry.ts });
+      state.scores.sort(function (a, b) { return b.score - a.score; });
+      state.scores = state.scores.slice(0, 10);
+    }
+  }
+
   function load() {
     return fetch(API + '?game=' + encodeURIComponent(cfg.game), { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         state.closesAt = d.closesAt; state.closed = !!d.closed; state.scores = d.scores || [];
+        mergeMine();
       })
       .catch(function () { /* offline: leave state as-is */ });
   }
@@ -243,6 +258,7 @@
           return;
         }
         state.myTs = res.d.ts;
+        state.myEntry = { initials: initials, score: pendingScore, ts: res.d.ts };
         state.scores.push({ initials: initials, score: pendingScore, ts: res.d.ts });
         state.scores.sort(function (a, b) { return b.score - a.score; });
         state.scores = state.scores.slice(0, 10);
@@ -270,7 +286,6 @@
       load();
     },
     onGameOver: function (score) {
-      state.myTs = null;
       load().then(function () {
         if (!state.closed && score > 0) showModal(score);
         else showBoard();          // scored zero, or the prize has closed

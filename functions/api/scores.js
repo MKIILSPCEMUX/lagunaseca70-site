@@ -51,6 +51,20 @@ export async function onRequest(context) {
 
   if (request.method === 'GET') {
     const prefix = `entry:${game}:`;
+    const key = url.searchParams.get('key');
+    const isAdmin = key && env.ADMIN_KEY && key === env.ADMIN_KEY;
+
+    // Admin: wipe this game's board  (…/api/scores?game=darkstar&key=ADMIN_KEY&wipe=yes)
+    if (isAdmin && url.searchParams.get('wipe') === 'yes') {
+      let cursor, removed = 0;
+      do {
+        const page = await env.SCORES.list({ prefix, limit: 1000, cursor });
+        for (const k of page.keys) { await env.SCORES.delete(k.name); removed++; }
+        cursor = page.list_complete ? null : page.cursor;
+      } while (cursor);
+      return json({ wiped: removed, game });
+    }
+
     const listed = await env.SCORES.list({ prefix, limit: 200 });
     const rows = listed.keys
       .map((k) => k.metadata)
@@ -59,8 +73,7 @@ export async function onRequest(context) {
       .map((m) => ({ initials: m.i, score: m.s, ts: m.t }));
 
     // Admin dump (includes emails) when the secret matches.
-    const key = url.searchParams.get('key');
-    if (key && env.ADMIN_KEY && key === env.ADMIN_KEY) {
+    if (isAdmin) {
       const full = [];
       for (const k of listed.keys.slice(0, 100)) {
         const v = await env.SCORES.get(k.name);
