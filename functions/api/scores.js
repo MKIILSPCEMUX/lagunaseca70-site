@@ -113,27 +113,34 @@ export async function onRequest(context) {
     const rand = Math.random().toString(36).slice(2, 8);
     const keyName = `entry:${game}:${invScore(game, score)}:${ts}:${rand}`;
 
+    // Optional: subscribe opt-ins to Buttondown (non-fatal if it fails).
+    // `bd` records what Buttondown said, so the admin dump can show whether it
+    // worked: 201 = created (confirm email sent), 400 = already subscribed,
+    // 401/403 = key/plan problem, "err" = the request itself failed.
+    let bd = null;
+    if (joinList && email) {
+      if (!env.BUTTONDOWN_API_KEY) {
+        bd = 'no-key';
+      } else {
+        try {
+          const r = await fetch('https://api.buttondown.com/v1/subscribers', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Token ' + env.BUTTONDOWN_API_KEY,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ email_address: email, tags: ['arcade', game] }),
+          });
+          bd = r.status;
+        } catch (e) { bd = 'err'; }
+      }
+    }
+
     await env.SCORES.put(
       keyName,
-      JSON.stringify({ initials, score, email, joinList, ts }),
+      JSON.stringify({ initials, score, email, joinList, ts, bd }),
       { metadata: { i: initials, s: score, t: ts } }
     );
-
-    // Optional: subscribe opt-ins to Buttondown (non-fatal if it fails).
-    if (joinList && email && env.BUTTONDOWN_API_KEY) {
-      try {
-        await fetch('https://api.buttondown.com/v1/subscribers', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Token ' + env.BUTTONDOWN_API_KEY,
-            'content-type': 'application/json',
-          },
-          // Double opt-in by default: the subscriber gets a confirm email and
-          // shows as "unactivated" in Buttondown until they click it.
-          body: JSON.stringify({ email_address: email, tags: ['arcade', game] }),
-        });
-      } catch (e) { /* ignore — the score still counts */ }
-    }
 
     return json({ ok: true, initials, score, ts });
   }

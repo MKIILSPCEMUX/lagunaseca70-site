@@ -758,7 +758,7 @@
         const a = asteroids[i]; let hit = false;
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.6); killFlash = 1; hit = true; break; }
+          if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 < a.r * a.r) { bullets.splice(j, 1); score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.75); killFlash = 1; hit = true; break; }
         }
         if (hit) splitAsteroid(i);
       }
@@ -845,7 +845,7 @@
         const a = asteroids[i], px = a.x - x0, py = a.y - y0;
         const t = px * dx + py * dy;
         if (t < 0) continue;                       // behind the ship
-        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.6); killFlash = 1; asteroids.splice(i, 1); }
+        if (Math.abs(px * -dy + py * dx) < a.r) { score += AST_SCORE[a.size]; sfx(a.size > 1 ? 'rock_big' : 'rock_small', a.size > 1 ? 1.3 : 0.75); killFlash = 1; asteroids.splice(i, 1); }
       }
     }
     function drawLaser() {
