@@ -109,12 +109,14 @@ export async function onRequest(context) {
     // Optional: subscribe opt-ins to Buttondown (non-fatal if it fails).
     if (joinList && email && env.BUTTONDOWN_API_KEY) {
       try {
-        await fetch('https://api.buttondown.email/v1/subscribers', {
+        await fetch('https://api.buttondown.com/v1/subscribers', {
           method: 'POST',
           headers: {
             'Authorization': 'Token ' + env.BUTTONDOWN_API_KEY,
             'content-type': 'application/json',
           },
+          // Double opt-in by default: the subscriber gets a confirm email and
+          // shows as "unactivated" in Buttondown until they click it.
           body: JSON.stringify({ email_address: email, tags: ['arcade', game] }),
         });
       } catch (e) { /* ignore — the score still counts */ }

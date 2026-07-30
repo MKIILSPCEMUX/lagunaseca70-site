@@ -262,8 +262,6 @@
         </div>
       </div>
 
-      <div id="hiscore-panel" class="hiscore-panel"></div>
-
       <div class="switches">
         <a class="switch blue" href="https://lagunaseca.bandcamp.com/track/laguna-sneca" target="_blank" rel="noopener noreferrer">
           <span class="led"></span>Bandcamp
@@ -297,8 +295,8 @@
 
   <script src="/leaderboard.js"></script>
   <script>
-    // high score board
-    if (window.Leaderboard) Leaderboard.init('sneca', { panel: '#hiscore-panel', accent: '#ff3a7f', prize: false });
+    // high score board — board draws on the game screen; restartAfterDeath replays
+    if (window.Leaderboard) Leaderboard.init('sneca', { screen: '.screen-viewport', accent: '#ff3a7f', prize: false, onReplay: restartAfterDeath });
 
     // -----------------------------
     // Core settings
@@ -587,6 +585,7 @@ canvas.addEventListener(
     // Game loop
     // -----------------------------
     function startGame() {
+      if (window.Leaderboard) Leaderboard.hideScreen();
       if (gameState === "playing") return;
       initAudio();
       resetGame();
@@ -606,6 +605,7 @@ canvas.addEventListener(
     }
 
     function restartAfterDeath() {
+      if (window.Leaderboard) Leaderboard.hideScreen();
       initAudio();
       resetGame();
       gameState = "playing";

@@ -441,8 +441,6 @@
         </div>
       </div>
 
-      <div id="hiscore-panel" class="hiscore-panel"></div>
-
       <div class="switches">
         <a class="switch" href="https://lagunaseca.bandcamp.com/album/live-from-m-sli-mountain" target="_blank" rel="noopener noreferrer">
           <span class="led amber"></span>Bandcamp
@@ -467,8 +465,8 @@
   <script src="/leaderboard.js"></script>
   <script>
   (function () {
-    // high score board (prize run)
-    if (window.Leaderboard) Leaderboard.init('darkstar', { panel: '#hiscore-panel', accent: '#48d86b', prize: true });
+    // high score board (prize run) — board draws on the CRT screen; resetGame replays
+    if (window.Leaderboard) Leaderboard.init('darkstar', { screen: '.scanner', accent: '#48d86b', prize: true, onReplay: resetGame });
     const cv = document.getElementById('game');
     const ctx = cv.getContext('2d');
     const hint = document.getElementById('startHint');
@@ -609,6 +607,7 @@
       if (a.size > 1) for (let k = 0; k < 2; k++) asteroids.push(makeAsteroid(a.size - 1, a.x, a.y, true));
     }
     function resetGame() {
+      if (window.Leaderboard) Leaderboard.hideScreen();
       asteroids.length = 0; bullets.length = 0; score = 0; integrity = 3;
       invuln = 80; hitFlash = 0; killFlash = 0; wasThrust = false; gameOver = false; reset();
       laserHeat = 0; overheated = false; lastEighth = -1; laserSound(false);

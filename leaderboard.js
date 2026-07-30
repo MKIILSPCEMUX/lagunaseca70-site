@@ -1,14 +1,19 @@
 /* Laguna Seca — shared high score board client.
    Both games load this and call:
-     Leaderboard.init('darkstar', { panel: '#hiscore-panel', accent: '#48d86b', prize: true });
-     Leaderboard.onGameOver(score);            // when a run ends
-   The entry form (initials + optional email + mailing-list opt-in) is built here,
-   so the game files only need a panel container and two calls. */
+     Leaderboard.init('darkstar', { screen: '.scanner', accent: '#48d86b',
+                                    prize: true, onReplay: resetGame });
+     Leaderboard.onGameOver(score);   // when a run ends
+     Leaderboard.hideScreen();        // call inside the game's own restart
+
+   Flow: run ends -> if you scored, an entry form pops (three initials + optional
+   email + mailing-list opt-in). After you submit or skip, the top-ten board is
+   drawn ON the game screen and stays until you play again. No permanent panel in
+   the cabinet, so nothing grows and shoves the layout around. */
 (function () {
   var API = '/api/scores';
-  var cfg = { game: 'darkstar', accent: '#48d86b', prize: false, panel: null };
-  var state = { closesAt: null, closed: false, scores: [] };
-  var modal = null;
+  var cfg = { game: 'darkstar', accent: '#48d86b', prize: false, screen: null, onReplay: null };
+  var state = { closesAt: null, closed: false, scores: [], myTs: null };
+  var modal = null, overlay = null, keyCatcher = null;
 
   function el(tag, cls, html) {
     var e = document.createElement(tag);
@@ -25,25 +30,13 @@
   function injectStyle() {
     if (document.getElementById('lb-style')) return;
     var css =
-      '.lb{--lb-accent:#48d86b;font-family:"Arial Narrow","Helvetica Neue",Arial,sans-serif;color:#f2efe8;}' +
-      '.lb-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:7px;}' +
-      '.lb-title{font-size:11px;font-weight:800;letter-spacing:0.22em;text-transform:uppercase;color:var(--lb-accent);}' +
-      '.lb-sub{font-size:9px;letter-spacing:0.06em;text-transform:uppercase;opacity:0.72;text-align:right;}' +
-      '.lb-list{list-style:none;margin:0;padding:0;}' +
-      '.lb-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 2px;border-bottom:1px solid rgba(255,255,255,0.08);}' +
-      '.lb-row:last-child{border-bottom:none;}' +
-      '.lb-rank{width:16px;opacity:0.5;font-size:10px;text-align:right;}' +
-      '.lb-ini{font-weight:800;letter-spacing:0.14em;width:44px;}' +
-      '.lb-sc{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;}' +
-      '.lb-row.me .lb-ini,.lb-row.me .lb-sc{color:var(--lb-accent);}' +
-      '.lb-empty{font-size:10.5px;opacity:0.6;padding:6px 2px;letter-spacing:0.04em;}' +
-      /* modal */
+      /* entry modal */
       '.lb-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px;' +
-      'background:rgba(3,5,10,0.72);backdrop-filter:blur(2px);}' +
+      'background:rgba(3,5,10,0.72);backdrop-filter:blur(2px);font-family:"Arial Narrow","Helvetica Neue",Arial,sans-serif;}' +
       '.lb-modal[hidden]{display:none;}' +
       '.lb-card{--lb-accent:#48d86b;width:100%;max-width:320px;background:linear-gradient(180deg,#14131a,#0c0b10);' +
       'border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:20px 18px;color:#f2efe8;' +
-      'font-family:"Arial Narrow","Helvetica Neue",Arial,sans-serif;box-shadow:0 24px 60px rgba(0,0,0,0.6);}' +
+      'box-shadow:0 24px 60px rgba(0,0,0,0.6);}' +
       '.lb-ct{font-size:13px;font-weight:800;letter-spacing:0.28em;text-transform:uppercase;text-align:center;color:var(--lb-accent);}' +
       '.lb-cs{text-align:center;font-size:12px;letter-spacing:0.08em;margin:6px 0 2px;opacity:0.9;}' +
       '.lb-cs b{font-size:18px;}' +
@@ -64,7 +57,22 @@
       '.lb-skip{background:rgba(255,255,255,0.1);color:#f2efe8;}' +
       '.lb-btn:disabled{opacity:0.55;cursor:default;}' +
       '.lb-msg{text-align:center;font-size:10.5px;min-height:14px;margin-top:9px;letter-spacing:0.04em;}' +
-      '.lb-msg.err{color:#ff6b6b;}.lb-msg.ok{color:var(--lb-accent);}';
+      '.lb-msg.err{color:#ff6b6b;}.lb-msg.ok{color:var(--lb-accent);}' +
+      /* on-screen board overlay */
+      '.lb-screen{position:absolute;inset:0;z-index:14;display:flex;flex-direction:column;padding:16px 16px 14px;' +
+      'background:rgba(4,6,10,0.92);color:#f2efe8;font-family:"Arial Narrow","Helvetica Neue",Arial,sans-serif;cursor:pointer;}' +
+      '.lb-screen[hidden]{display:none;}' +
+      '.lb-s-title{font-size:13px;font-weight:800;letter-spacing:0.26em;text-transform:uppercase;color:var(--lb-accent);text-align:center;}' +
+      '.lb-s-sub{font-size:9px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.7;text-align:center;margin:3px 0 12px;}' +
+      '.lb-s-list{list-style:none;margin:0;padding:0;flex:1 1 auto;overflow-y:auto;}' +
+      '.lb-s-row{display:flex;align-items:center;gap:8px;font-size:14px;padding:5px 3px;border-bottom:1px solid rgba(255,255,255,0.09);}' +
+      '.lb-s-row:last-child{border-bottom:none;}' +
+      '.lb-s-rank{width:20px;text-align:right;opacity:0.5;font-size:11px;}' +
+      '.lb-s-ini{font-weight:800;letter-spacing:0.16em;width:52px;}' +
+      '.lb-s-sc{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;}' +
+      '.lb-s-row.me .lb-s-ini,.lb-s-row.me .lb-s-sc{color:var(--lb-accent);}' +
+      '.lb-s-empty{opacity:0.7;text-align:center;font-size:12px;padding:18px 0;flex:1;}' +
+      '.lb-s-foot{text-align:center;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;margin-top:12px;color:var(--lb-accent);}';
     var s = el('style'); s.id = 'lb-style'; s.textContent = css;
     document.head.appendChild(s);
   }
@@ -72,44 +80,10 @@
   function fmtCountdown(closesAt) {
     var ms = Date.parse(closesAt) - Date.now();
     if (ms <= 0) return 'Closed';
-    var d = Math.floor(ms / 86400000);
-    var h = Math.floor((ms % 86400000) / 3600000);
+    var d = Math.floor(ms / 86400000), h = Math.floor((ms % 86400000) / 3600000);
     if (d > 0) return 'Prize closes in ' + d + 'd ' + h + 'h';
     var m = Math.floor((ms % 3600000) / 60000);
     return 'Prize closes in ' + h + 'h ' + m + 'm';
-  }
-
-  function renderPanel() {
-    var host = typeof cfg.panel === 'string' ? document.querySelector(cfg.panel) : cfg.panel;
-    if (!host) return;
-    host.innerHTML = '';
-    var box = el('div', 'lb');
-    box.style.setProperty('--lb-accent', cfg.accent);
-
-    var head = el('div', 'lb-head');
-    head.appendChild(el('span', 'lb-title', 'High Scores'));
-    var sub = 'Top scores';
-    if (cfg.prize) sub = state.closed ? 'Competition closed' : fmtCountdown(state.closesAt);
-    head.appendChild(el('span', 'lb-sub', esc(sub)));
-    box.appendChild(head);
-
-    if (!state.scores.length) {
-      box.appendChild(el('div', 'lb-empty', 'Be the first name on the board.'));
-    } else {
-      var list = el('ol', 'lb-list');
-      state.scores.forEach(function (r, i) {
-        var row = el('div', 'lb-row' + (r._me ? ' me' : ''));
-        row.appendChild(el('span', 'lb-rank', String(i + 1)));
-        row.appendChild(el('span', 'lb-ini', esc(r.initials)));
-        row.appendChild(el('span', 'lb-sc', String(r.score)));
-        list.appendChild(row);
-      });
-      box.appendChild(list);
-    }
-    if (cfg.prize && state.closed && state.scores.length) {
-      box.appendChild(el('div', 'lb-empty', 'Winner: ' + esc(state.scores[0].initials) + '. We will be in touch.'));
-    }
-    host.appendChild(box);
   }
 
   function load() {
@@ -117,11 +91,72 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         state.closesAt = d.closesAt; state.closed = !!d.closed; state.scores = d.scores || [];
-        renderPanel();
       })
-      .catch(function () { renderPanel(); });
+      .catch(function () { /* offline: leave state as-is */ });
   }
 
+  /* ---------- on-screen board ---------- */
+  function ensureOverlay() {
+    if (overlay) return overlay;
+    var host = document.querySelector(cfg.screen);
+    if (!host) return null;
+    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+    overlay = el('div', 'lb-screen'); overlay.hidden = true;
+    overlay.style.setProperty('--lb-accent', cfg.accent);
+    overlay.addEventListener('click', replay);
+    host.appendChild(overlay);
+    return overlay;
+  }
+
+  function renderBoard() {
+    if (!overlay) return;
+    var sub = cfg.prize ? (state.closed ? 'Competition closed' : fmtCountdown(state.closesAt)) : 'Top scores';
+    var html = '<div class="lb-s-title">High Scores</div><div class="lb-s-sub">' + esc(sub) + '</div>';
+    if (!state.scores.length) {
+      html += '<div class="lb-s-empty">Be the first name on the board.</div>';
+    } else {
+      html += '<ol class="lb-s-list">';
+      state.scores.forEach(function (r, i) {
+        var me = (state.myTs && r.ts === state.myTs) ? ' me' : '';
+        html += '<div class="lb-s-row' + me + '"><span class="lb-s-rank">' + (i + 1) + '</span>' +
+          '<span class="lb-s-ini">' + esc(r.initials) + '</span>' +
+          '<span class="lb-s-sc">' + r.score + '</span></div>';
+      });
+      html += '</ol>';
+    }
+    html += '<div class="lb-s-foot">Tap or press space to play again</div>';
+    overlay.innerHTML = html;
+  }
+
+  function showBoard() {
+    ensureOverlay();
+    if (!overlay) return;
+    renderBoard();
+    overlay.hidden = false;
+    addKeyCatcher();
+  }
+  function hideScreen() {
+    if (overlay) overlay.hidden = true;
+    removeKeyCatcher();
+  }
+  function addKeyCatcher() {
+    if (keyCatcher) return;
+    keyCatcher = function (e) {
+      if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter') {
+        e.preventDefault(); e.stopPropagation(); replay();
+      }
+    };
+    document.addEventListener('keydown', keyCatcher, true);
+  }
+  function removeKeyCatcher() {
+    if (keyCatcher) { document.removeEventListener('keydown', keyCatcher, true); keyCatcher = null; }
+  }
+  function replay() {
+    hideScreen();
+    if (typeof cfg.onReplay === 'function') { try { cfg.onReplay(); } catch (e) {} }
+  }
+
+  /* ---------- entry modal ---------- */
   function buildModal() {
     if (modal) return;
     injectStyle();
@@ -132,18 +167,17 @@
       '<div class="lb-cs">You scored <b class="lb-scoreval">0</b></div>' +
       '<div class="lb-cp"></div>' +
       '<div class="lb-inis">' +
-      '<input maxlength="1" inputmode="latin" aria-label="Initial 1">' +
-      '<input maxlength="1" inputmode="latin" aria-label="Initial 2">' +
-      '<input maxlength="1" inputmode="latin" aria-label="Initial 3"></div>' +
-      '<input class="lb-field lb-email" type="email" placeholder="Email (optional)" aria-label="Email">' +
+      '<input maxlength="1" autocomplete="off" aria-label="Initial 1">' +
+      '<input maxlength="1" autocomplete="off" aria-label="Initial 2">' +
+      '<input maxlength="1" autocomplete="off" aria-label="Initial 3"></div>' +
+      '<input class="lb-field lb-email" type="email" autocomplete="email" placeholder="Email (optional)" aria-label="Email">' +
       '<label class="lb-opt"><input type="checkbox" class="lb-join"><span>Add me to the Laguna Seca mailing list</span></label>' +
       '<div class="lb-tip">Screenshot your score to share it.</div>' +
       '<div class="lb-actions"><button class="lb-btn lb-go">Submit</button><button class="lb-btn lb-skip">Skip</button></div>' +
       '<div class="lb-msg"></div></div>';
     document.body.appendChild(modal);
 
-    var card = modal.querySelector('.lb-card');
-    card.style.setProperty('--lb-accent', cfg.accent);
+    modal.querySelector('.lb-card').style.setProperty('--lb-accent', cfg.accent);
     var inputs = Array.prototype.slice.call(modal.querySelectorAll('.lb-inis input'));
     inputs.forEach(function (inp, i) {
       inp.addEventListener('input', function () {
@@ -154,9 +188,10 @@
         if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i - 1].focus();
       });
     });
-    modal.querySelector('.lb-skip').addEventListener('click', hideModal);
+    modal.querySelector('.lb-skip').addEventListener('click', function () { hideModal(); showBoard(); });
     modal.querySelector('.lb-go').addEventListener('click', submit);
-    // keep game keyboard controls from firing while typing
+    // stop the game's own key handlers (on window) from firing while typing,
+    // but keep the inputs' own handlers working (bubble phase, not capture)
     modal.addEventListener('keydown', function (e) { e.stopPropagation(); });
   }
 
@@ -186,7 +221,7 @@
     if (initials.length !== 3) { msg.className = 'lb-msg err'; msg.textContent = 'Enter three initials.'; return; }
     var email = modal.querySelector('.lb-email').value.trim();
     var joinList = modal.querySelector('.lb-join').checked;
-    if ((joinList || (cfg.prize)) && email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       msg.className = 'lb-msg err'; msg.textContent = 'That email looks off.'; return;
     }
     if (joinList && !email) { msg.className = 'lb-msg err'; msg.textContent = 'Add an email to join the list.'; return; }
@@ -207,13 +242,15 @@
           msg.textContent = res.d && res.d.closed ? 'The competition has closed.' : (res.d && res.d.error) || 'Could not save.';
           return;
         }
-        msg.className = 'lb-msg ok'; msg.textContent = 'On the board.';
-        // optimistic insert, then reload from server
-        state.scores.push({ initials: initials, score: pendingScore, _me: true });
+        state.myTs = res.d.ts;
+        state.scores.push({ initials: initials, score: pendingScore, ts: res.d.ts });
         state.scores.sort(function (a, b) { return b.score - a.score; });
         state.scores = state.scores.slice(0, 10);
-        renderPanel();
-        setTimeout(function () { hideModal(); load(); }, 700);
+        msg.className = 'lb-msg ok'; msg.textContent = 'On the board.';
+        setTimeout(function () {
+          hideModal(); showBoard();
+          load().then(function () { renderBoard(); });   // reconcile with the server
+        }, 500);
       })
       .catch(function () {
         busy = false; modal.querySelector('.lb-go').disabled = false;
@@ -227,15 +264,19 @@
       cfg.game = game;
       cfg.accent = opts.accent || cfg.accent;
       cfg.prize = !!opts.prize;
-      cfg.panel = opts.panel || null;
+      cfg.screen = opts.screen || null;
+      cfg.onReplay = opts.onReplay || null;
       injectStyle();
       load();
     },
     onGameOver: function (score) {
-      if (state.closed) { load(); return; }        // frozen board, just refresh
-      if (!(score > 0)) return;
-      showModal(score);
+      state.myTs = null;
+      load().then(function () {
+        if (!state.closed && score > 0) showModal(score);
+        else showBoard();          // scored zero, or the prize has closed
+      });
     },
-    refresh: function () { return load(); },
+    hideScreen: hideScreen,
+    refresh: load,
   };
 })();
