@@ -13,11 +13,14 @@
  *   COMPETITION_CLOSE   (text)          — optional ISO datetime; when the Dark Star
  *                                          prize run closes. Defaults below.
  *   ADMIN_KEY           (secret)        — optional; GET ...&key=ADMIN_KEY dumps emails
- *   BUTTONDOWN_API_KEY  (secret)        — optional; subscribes opt-ins to the list
+ *   PLAY_SECRET         (secret)        — optional; signs play tokens. Falls back
+ *                                          to ADMIN_KEY if unset. Never sent to the browser.
+ *   BUTTONDOWN_API_KEY  (secret)        — no longer used (opt-in is client-side embed)
  */
 
 const GAMES = ['darkstar', 'sneca'];
-const CAP = { darkstar: 200000, sneca: 800 };   // reject scores above a plausible ceiling
+// Plausible ceilings. A real run stays well under these; anything above is junk.
+const CAP = { darkstar: 12000, sneca: 700 };
 const PAD = 7;                                    // width for the sortable inverse-score key
 const DEFAULT_CLOSE = '2026-08-14T19:00:00Z';     // 8pm UK time (BST) on Fri 14 Aug 2026; override with COMPETITION_CLOSE
 
@@ -30,6 +33,29 @@ function json(data, status = 200) {
 
 function invScore(game, score) {
   return String(CAP[game] - score).padStart(PAD, '0');
+}
+
+// ---- signed play tokens (stop direct POSTs to the API) ----
+// The signing secret lives only on the server, so the browser can't forge a
+// token. To submit, a run must first fetch one from GET ?start=1, and it can
+// only be used once.
+function toHex(buf) {
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function hmacHex(secret, msg) {
+  const k = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  return toHex(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(msg)));
+}
+function safeEq(a, b) {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+function playSecret(env) {
+  return env.PLAY_SECRET || env.ADMIN_KEY || 'laguna-unset-secret';
 }
 
 export async function onRequest(context) {
@@ -51,6 +77,15 @@ export async function onRequest(context) {
 
   if (request.method === 'GET') {
     const prefix = `entry:${game}:`;
+
+    // Issue a signed play token for a run that's starting.
+    if (url.searchParams.get('start')) {
+      const iat = Date.now();
+      const nonce = crypto.randomUUID();
+      const sig = await hmacHex(playSecret(env), game + '.' + iat + '.' + nonce);
+      return json({ token: iat + '.' + nonce + '.' + sig });
+    }
+
     const key = url.searchParams.get('key');
     const isAdmin = key && env.ADMIN_KEY && key === env.ADMIN_KEY;
 
@@ -100,6 +135,21 @@ export async function onRequest(context) {
     if (!Number.isFinite(score) || score < 0 || score > CAP[game]) {
       return json({ error: 'score out of range' }, 400);
     }
+
+    // play token: must be one we signed, unexpired, not reused, and old enough
+    // that a real run of this length could have produced the score.
+    const token = String(body.token || '');
+    const tp = token.split('.');
+    if (tp.length !== 3) return json({ error: 'no play token' }, 403);
+    const iat = Number(tp[0]);
+    const expectSig = await hmacHex(playSecret(env), game + '.' + tp[0] + '.' + tp[1]);
+    if (!safeEq(tp[2], expectSig)) return json({ error: 'bad play token' }, 403);
+    const age = Date.now() - iat;
+    if (!(age >= 0 && age < 6 * 3600 * 1000)) return json({ error: 'token expired' }, 403);
+    if (age < 2000 + score * 12) return json({ error: 'too fast' }, 403);
+    const usedKey = 'used:' + tp[1];
+    if (await env.SCORES.get(usedKey)) return json({ error: 'token already used' }, 409);
+    await env.SCORES.put(usedKey, '1', { expirationTtl: 21600 });
 
     // email: optional, lightly validated
     let email = String(body.email || '').trim().toLowerCase();

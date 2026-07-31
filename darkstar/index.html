@@ -614,7 +614,7 @@
       if (a.size > 1) for (let k = 0; k < 2; k++) asteroids.push(makeAsteroid(a.size - 1, a.x, a.y, true));
     }
     function resetGame() {
-      if (window.Leaderboard) Leaderboard.hideScreen();
+      if (window.Leaderboard) { Leaderboard.hideScreen(); Leaderboard.onGameStart(); }
       asteroids.length = 0; bullets.length = 0; score = 0; integrity = 3;
       invuln = 80; hitFlash = 0; killFlash = 0; wasThrust = false; gameOver = false; reset();
       laserHeat = 0; overheated = false; lastEighth = -1; laserSound(false);
@@ -677,6 +677,7 @@
     function start() {
       if (started) return;
       started = true;
+      if (window.Leaderboard) Leaderboard.onGameStart();
       hint.classList.add('hidden');
       clockStart = performance.now();
       initSfx();

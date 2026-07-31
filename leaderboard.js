@@ -12,7 +12,7 @@
 (function () {
   var API = '/api/scores';
   var cfg = { game: 'darkstar', accent: '#48d86b', prize: false, screen: null, onReplay: null };
-  var state = { closesAt: null, closed: false, scores: [], myTs: null, myEntry: null };
+  var state = { closesAt: null, closed: false, scores: [], myTs: null, myEntry: null, token: null };
   var modal = null, overlay = null, keyCatcher = null;
 
   function el(tag, cls, html) {
@@ -112,6 +112,15 @@
       state.scores.sort(function (a, b) { return b.score - a.score; });
       state.scores = state.scores.slice(0, 10);
     }
+  }
+
+  // Fetch a signed play token when a run starts. The score submit needs it, and
+  // it ages with the run so the server can tell a real run from an instant fake.
+  function fetchToken() {
+    return fetch(API + '?game=' + encodeURIComponent(cfg.game) + '&start=1', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.token) state.token = d.token; })
+      .catch(function () {});
   }
 
   function load() {
@@ -263,7 +272,7 @@
     fetch(API, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ game: cfg.game, initials: initials, score: pendingScore, email: email, joinList: joinList }),
+      body: JSON.stringify({ game: cfg.game, initials: initials, score: pendingScore, email: email, joinList: joinList, token: state.token }),
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
@@ -273,6 +282,7 @@
           msg.textContent = res.d && res.d.closed ? 'The competition has closed.' : (res.d && res.d.error) || 'Could not save.';
           return;
         }
+        state.token = null; // single-use; the next run fetches a fresh one
         state.myTs = res.d.ts;
         state.myEntry = { initials: initials, score: pendingScore, ts: res.d.ts };
         state.scores.push({ initials: initials, score: pendingScore, ts: res.d.ts });
@@ -300,7 +310,9 @@
       cfg.onReplay = opts.onReplay || null;
       injectStyle();
       load();
+      fetchToken();
     },
+    onGameStart: function () { fetchToken(); },
     onGameOver: function (score) {
       load().then(function () {
         if (!state.closed && score > 0) showModal(score);

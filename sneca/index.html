@@ -585,7 +585,7 @@ canvas.addEventListener(
     // Game loop
     // -----------------------------
     function startGame() {
-      if (window.Leaderboard) Leaderboard.hideScreen();
+      if (window.Leaderboard) { Leaderboard.hideScreen(); Leaderboard.onGameStart(); }
       if (gameState === "playing") return;
       initAudio();
       resetGame();
@@ -605,7 +605,7 @@ canvas.addEventListener(
     }
 
     function restartAfterDeath() {
-      if (window.Leaderboard) Leaderboard.hideScreen();
+      if (window.Leaderboard) { Leaderboard.hideScreen(); Leaderboard.onGameStart(); }
       initAudio();
       resetGame();
       gameState = "playing";
