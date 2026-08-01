@@ -269,7 +269,7 @@
 
     if (joinList && email) subscribeEmbed(email);
 
-    fetch(API, {
+    fetch(API + '?game=' + encodeURIComponent(cfg.game), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ game: cfg.game, initials: initials, score: pendingScore, email: email, joinList: joinList, token: state.token }),
