@@ -102,8 +102,8 @@
       font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
       color: #0a0a14; background: rgba(255,255,255,0.86); touch-action: none;
       box-shadow: 0 5px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5); }
-    .pad-gas { background: var(--button-amber); color: #241000; flex: 1.2; }
-    .pad-brake { background: #d8d2c4; color: #241000; }
+    .pad-gas   { background: #2fbf52; color: #04240e; flex: 1.15; }
+    .pad-brake { background: #e0342c; color: #fff;    flex: 1.15; }
     .pad:active { transform: translateY(1px); filter: brightness(0.92); }
     @media (pointer: coarse) { .pads { display: flex; } }
 
@@ -160,7 +160,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v0.9.5</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v0.9.6</div>
       </div>
 
       <div class="bezel">
@@ -171,9 +171,9 @@
 
       <div class="pads">
         <button class="pad pad-left" aria-label="Steer left">&#9664;</button>
+        <button class="pad pad-right" aria-label="Steer right">&#9654;</button>
         <button class="pad pad-brake" aria-label="Brake">Brake</button>
         <button class="pad pad-gas" aria-label="Accelerate">Gas</button>
-        <button class="pad pad-right" aria-label="Steer right">&#9654;</button>
       </div>
 
       <div class="switches">
@@ -195,7 +195,7 @@
       <div class="hull-foot">
         <span class="foot-play">Arrows to steer &middot; up / down for the pedal</span>
         <span class="foot-play">Thread the traffic &middot; keep the chain alive</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v0.9.5</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v0.9.6</span>
       </div>
     </div>
   </div>
@@ -229,7 +229,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v0.9.5 · 2 Aug";
+const VERSION      = "v0.9.6 · 2 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -589,7 +589,8 @@ const state = {
   hitFlash:0, snareFlash:0, kickFlash:0, chain:0, chainT:0, pop:null, bestChain:0,
   crt:false, stars:[]
 };
-for (let i=0;i<180;i++) state.stars.push({x:Math.random(), y:Math.random()*0.55, b:Math.random()});
+for (let i=0;i<340;i++) state.stars.push({x:Math.random(), y:Math.random()*0.92,
+  b:0.30 + Math.pow(Math.random(),1.7)*0.70});
 
 /* ============================================================
    ROAD GENERATION — lazy, driven by the current musical section
@@ -1339,12 +1340,12 @@ function weatherPass(horizon){
     const cy = Math.round(clamp(horizon,40,VH)-46);
     const now = state.musicT;
 
-    // 360-degree horizon glow
+    // 360-degree horizon glow: the warmth, low down, where it belongs
     ctx.globalCompositeOperation="lighter";
-    const hg = ctx.createLinearGradient(0, Math.max(0,horizon-26), 0, Math.max(0,horizon)+6);
+    const hg = ctx.createLinearGradient(0, Math.max(0,horizon-30), 0, Math.max(0,horizon)+4);
     hg.addColorStop(0,"rgba(255,120,50,0)");
-    hg.addColorStop(1,"rgba(255,140,60,"+(0.42*t).toFixed(3)+")");
-    ctx.fillStyle=hg; ctx.fillRect(0, Math.max(0,horizon-26), VW, 34);
+    hg.addColorStop(1,"rgba(255,146,66,"+(0.38*t).toFixed(3)+")");
+    ctx.fillStyle=hg; ctx.fillRect(0, Math.max(0,horizon-30), VW, 34);
 
     // stars, bright enough to read through the dark
     for (const st of state.stars){
@@ -1362,25 +1363,31 @@ function weatherPass(horizon){
 
     if (e > 0.985){
       const f = clamp((e-0.985)/0.015, 0, 1);
-      // corona rays, slowly turning
+      /* Everything bright is clipped to the sky. Before, the corona was a
+         66px floodlight in additive mode reaching well past the horizon,
+         which washed the tarmac out and left nothing to drive on. */
+      ctx.save();
+      ctx.beginPath(); ctx.rect(0, 0, VW, Math.max(0, horizon-1)); ctx.clip();
+      // corona rays, slowly turning, short and soft
       ctx.save(); ctx.translate(cx,cy); ctx.rotate(now*0.06);
-      for (let i=0;i<16;i++){
-        const a0 = i/16*Math.PI*2;
-        const len = 34 + 30*Math.abs(Math.sin(i*2.3)) + 5*Math.sin(now*1.6+i);
+      for (let i=0;i<18;i++){
+        const a0 = i/18*Math.PI*2;
+        const len = 26 + 16*Math.abs(Math.sin(i*2.3)) + 3*Math.sin(now*1.6+i);
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a0-0.055)*23, Math.sin(a0-0.055)*23);
+        ctx.moveTo(Math.cos(a0-0.045)*22, Math.sin(a0-0.045)*22);
         ctx.lineTo(Math.cos(a0)*len,      Math.sin(a0)*len);
-        ctx.lineTo(Math.cos(a0+0.055)*23, Math.sin(a0+0.055)*23);
+        ctx.lineTo(Math.cos(a0+0.045)*22, Math.sin(a0+0.045)*22);
         ctx.closePath();
-        ctx.fillStyle="rgba(255,244,214,"+(0.30*f).toFixed(3)+")"; ctx.fill();
+        ctx.fillStyle="rgba(255,238,206,"+(0.15*f).toFixed(3)+")"; ctx.fill();
       }
       ctx.restore();
-      // the corona itself
-      const cg = ctx.createRadialGradient(cx,cy,20, cx,cy,66);
-      cg.addColorStop(0,"rgba(255,248,226,"+(0.95*f).toFixed(3)+")");
-      cg.addColorStop(0.35,"rgba(255,208,150,"+(0.45*f).toFixed(3)+")");
-      cg.addColorStop(1,"rgba(255,150,70,0)");
-      ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(cx,cy,66,0,7); ctx.fill();
+      // the corona: a tight warm halo rather than a light source
+      const cg = ctx.createRadialGradient(cx,cy,19, cx,cy,44);
+      cg.addColorStop(0,   "rgba(255,246,222,"+(0.52*f).toFixed(3)+")");
+      cg.addColorStop(0.40,"rgba(255,196,132,"+(0.22*f).toFixed(3)+")");
+      cg.addColorStop(1,   "rgba(255,140,60,0)");
+      ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(cx,cy,44,0,7); ctx.fill();
+      ctx.restore();
       ctx.globalCompositeOperation="source-over";
       // the moon
       ctx.fillStyle="#07030e"; ctx.beginPath(); ctx.arc(cx,cy,22,0,7); ctx.fill();
