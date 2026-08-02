@@ -71,21 +71,28 @@ const TIME_CAP     = 50;
 const MAX_YAW      = 0.46;    // rad of steering lock
 const YAW_IN       = 7.0;     // how fast the wheel goes on
 const YAW_BACK     = 5.5;     // and comes off
-const GRIP_HOLD    = 9.0;     // lateral grip when stuck
-const GRIP_SLIDE   = 2.1;     // and when it has let go
+const GRIP_HOLD    = 17.0;    // lateral grip when stuck: crisp, not vague
+const GRIP_SLIDE   = 1.7;     // and when it has let go
 const LAT_K        = 1.35;    // yaw -> lateral demand
-const BREAK_AT     = 0.62;    // demand above this and it lets go
-const HOLD_AT      = 0.30;    // and below this it hooks back up
-const SLIDE_YAW    = 2.10;    // the tail keeps coming round
+const CURVE_LOAD   = 0.085;   // the corner itself loads the tyres too
+/* Full lock on a straight at full speed comes to about 0.72, which is
+   under the limit, so the car GRIPS and steers precisely. It is the
+   corner that pushes you over: a hard bend adds its own load, and taken
+   flat out the total passes 1.0 and the rear lets go. Braking on the way
+   in drops the load and you can take the same corner stuck down. That
+   choice is the mechanic. */
+const BREAK_AT     = 1.02;
+const HOLD_AT      = 0.58;
+const SLIDE_YAW    = 3.10;    // the tail keeps coming round
 const CENTRIFUGAL  = 0.0000300;
-const SLIP_LINK    = 0.115;    // slip angle that counts as a real drift
+const SLIP_LINK    = 0.13;    // slip angle that counts as a real drift
 
 /* ---- the chain ladder -------------------------------------------
    Seven notes rising to the octave, then the octave held. Root is a
    placeholder until Mike confirms the key; change CHAIN_ROOT and
    CHAIN_SCALE and everything follows. */
-const CHAIN_ROOT  = 261.63;                 // C4, placeholder
-const CHAIN_SCALE = [0,2,4,5,7,9,11,12];    // major
+const CHAIN_ROOT  = 415.30;                 // G#4
+const CHAIN_SCALE = [0,2,3,5,7,9,10,12];    // G# Dorian: G# A# B C# D# E# F# G#
 const CHAIN_CAP   = CHAIN_SCALE.length - 1; // the octave
 
 /* ---------- internal resolution (OutRun's own) ------------------ */
@@ -577,8 +584,9 @@ function update(dt){
                * clamp(Math.abs(state.vlat)*1.5, 0, 1);
   state.yaw = clamp(state.yaw, -0.95, 0.95);
 
-  // what the front wheels are asking for, sideways, against what grip allows
-  const demand = Math.sin(state.yaw) * speedPct * LAT_K;
+  // total lateral load: what you are asking of it, plus what the bend is
+  const demand = Math.sin(state.yaw) * speedPct * LAT_K
+               + pSeg.curve * CURVE_LOAD * speedPct;
     if (!state.sliding && Math.abs(demand) > BREAK_AT) state.sliding = true;
   // it hooks up again when grip has caught the demand, not when slip is zero
   if (state.sliding && Math.abs(demand) < HOLD_AT && Math.abs(demand - state.vlat) < 0.18)
@@ -918,65 +926,142 @@ function drawCar(c, x, y, sc, clipY){
   if (clipped) ctx.restore();
 }
 
+/* The Nova, seen from behind, at an angle.
+
+   Rotating a flat rear panel makes the car LEAN, which is what it was
+   doing. A car going sideways foreshortens: the rear face narrows as it
+   turns away and a flank appears alongside it. Two faces, not one sprite
+   on a pivot. The flank is drawn as a trapezoid, shorter and raised at
+   its far end, which is what sells the angle. */
 function drawPlayerCar(){
+  const ang  = clamp(state.slip * 1.75, -0.78, 0.78);
+  const co   = Math.abs(Math.cos(ang));
+  const si   = Math.abs(Math.sin(ang));
+  const nose = ang >= 0 ? 1 : -1;          // +1 = nose right, so we see the left flank
+
+  const W = 54, H = 30, LEN = 58;
+  const rearW = Math.max(6, W * co);
+  const sideW = LEN * si;
+  const total = rearW + sideW;
+
   const bob = Math.sin(state.musicT*Math.PI/TICK)*0.5;
-  const cx = Math.round(VW/2 + (state.shake ? rnd(-state.shake,state.shake) : 0));
+  const cx = Math.round(VW/2 + state.slip*26 + (state.shake ? rnd(-state.shake,state.shake) : 0));
   const cy = Math.round(VH - 22 + bob + (state.shake ? rnd(-state.shake,state.shake)*0.5 : 0));
-  const steer = clamp((input.left?-1:0)+(input.right?1:0),-1,1);
-  const w = 54, h = 30, t = steer*2;
-  /* Angle the whole car into the slide, and slide it across the screen a
-     little so you can read the slip without a readout. */
-  ctx.save();
-  ctx.translate(cx + state.slip*46, cy);
-  ctx.rotate(state.slip*0.42);
-  ctx.translate(-cx, -cy);
+
+  // flank on the far side from where the nose points
+  const flankLeft = nose > 0;
+  const x0 = cx - total/2;
+  const rx0 = flankLeft ? x0 + sideW : x0;
+  const rx1 = rx0 + rearW;
+  const fx0 = flankLeft ? x0 : rx1;
+  const fx1 = fx0 + sideW;
+
   ctx.strokeStyle="#000"; ctx.lineWidth=2;
   ctx.fillStyle="rgba(0,0,0,.45)";
-  ctx.beginPath(); ctx.ellipse(cx, cy+9, w*0.55, 5, 0, 0, 7); ctx.fill();
-  box(cx-w/2-3, cy-9, 7, 15, "#141418");
-  box(cx+w/2-4, cy-9, 7, 15, "#141418");
-  /* A Nova is a tall narrow brick with a big glass tailgate and a roof
-     spoiler sitting over it. */
-  box(cx-w*0.40+t, cy-h-12, w*0.80, 6, "#15151a");          // roof spoiler
-  box(cx-w*0.36+t, cy-h-7,  w*0.72, 17, "#1a2f52");         // tailgate glass
-  ctx.fillStyle="#2f4f80"; ctx.fillRect(cx-w*0.31+t, cy-h-5, w*0.62, 9);
+  ctx.beginPath(); ctx.ellipse(cx, cy+9, total*0.55, 5, 0, 0, 7); ctx.fill();
+
+  const top = cy - H + 9, roof = cy - H - 12;
+
+  /* ---- the flank, when there is one ---- */
+  if (sideW > 3){
+    const farX  = flankLeft ? fx0 : fx1;
+    const nearX = flankLeft ? fx1 : fx0;
+    const rise  = 11 * si;                      // the far end recedes and lifts
+    const drop  = 7 * si;                       // and the sill rises to meet it
+    const inset = flankLeft ? -1 : 1;
+    const quad = (tn, bn, tf, bf) => { ctx.beginPath();
+      ctx.moveTo(nearX, tn); ctx.lineTo(farX, tf);
+      ctx.lineTo(farX, bf);  ctx.lineTo(nearX, bn); ctx.closePath(); };
+
+    // lower body, sill rising as it goes away
+    quad(top, cy+5, top+rise, cy+5-drop);
+    ctx.fillStyle="#8f1710"; ctx.fill(); ctx.stroke();
+    // the roof and pillar band
+    quad(roof+2, top+1, roof+4+rise, top+1+rise);
+    ctx.fillStyle="#7a120c"; ctx.fill(); ctx.stroke();
+    // side glass: upper half only, so there is a body sill under it
+    ctx.fillStyle="#16273f";
+    ctx.beginPath();
+    ctx.moveTo(nearX+inset*2, roof+6);
+    ctx.lineTo(farX-inset*3,  roof+8+rise);
+    ctx.lineTo(farX-inset*3,  top-3+rise);
+    ctx.lineTo(nearX+inset*2, top-3);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // the door shut line, two thirds along
+    ctx.strokeStyle="#5e0f0a"; ctx.lineWidth=1;
+    const dxl = lerp(nearX, farX, 0.55);
+    ctx.beginPath(); ctx.moveTo(dxl, roof+5+rise*0.55); ctx.lineTo(dxl, cy+4-drop*0.55); ctx.stroke();
+    ctx.strokeStyle="#000"; ctx.lineWidth=2;
+    // GTE side stripe
+    ctx.fillStyle="#20242c";
+    ctx.beginPath();
+    ctx.moveTo(nearX, top+7); ctx.lineTo(farX, top+7+rise);
+    ctx.lineTo(farX, top+10+rise); ctx.lineTo(nearX, top+10);
+    ctx.closePath(); ctx.fill();
+    // rear wheel, at the near end where the arch is
+    const ww = Math.max(5, sideW*0.26);
+    const wx = flankLeft ? fx1-ww-1 : fx0+1;
+    box(wx, cy-3, ww, 12, "#141418");
+    ctx.fillStyle="#8a8a92"; ctx.fillRect(wx+1.5, cy, ww-3, 6);
+  }
+
+  /* ---- the rear face, foreshortened ---- */
+  const q = rearW / W;                          // how much of it we still see
+  box(rx0-3, cy-9, 7, 15, "#141418");           // near wheel
+  box(rx1-4, cy-9, 7, 15, "#141418");
+  box(rx0 + rearW*0.10, roof,   rearW*0.80, 6,  "#15151a");   // roof spoiler
+  box(rx0 + rearW*0.14, roof+5, rearW*0.72, 17, "#1a2f52");   // tailgate glass
+  ctx.fillStyle="#2f4f80"; ctx.fillRect(rx0+rearW*0.19, roof+7, rearW*0.62, 9);
   ctx.fillStyle="#a81c14";
-  ctx.fillRect(cx-w*0.40+t, cy-h-7, 4, 17);
-  ctx.fillRect(cx+w*0.36+t-4, cy-h-7, 4, 17);
-  box(cx-w/2, cy-h+9, w, h-4, "#a81c14");                   // rear panel
-  ctx.fillStyle="#c4241a"; ctx.fillRect(cx-w/2+3, cy-h+11, w-6, h-9);
-  ctx.fillStyle="#20242c"; ctx.fillRect(cx-w/2+3, cy-h+9, w-6, 3);
-  box(cx-w/2+3,  cy-h+15, 10, 13, "#e0402a");               // tall Nova clusters
-  box(cx+w/2-13, cy-h+15, 10, 13, "#e0402a");
-  ctx.fillStyle="#ffb03a";
-  ctx.fillRect(cx-w/2+4, cy-h+16, 8, 4);
-  ctx.fillRect(cx+w/2-12, cy-h+16, 8, 4);
-  if (input.down){ ctx.fillStyle="#ff5a3c";
-    ctx.fillRect(cx-w/2+4, cy-h+21, 8, 6); ctx.fillRect(cx+w/2-12, cy-h+21, 8, 6); }
-  box(cx-13, cy-4, 26, 8, "#f0d84a");
-  ctx.fillStyle="#20242c"; ctx.font="bold 6px ui-monospace, monospace";
-  ctx.textAlign="center"; ctx.textBaseline="top";
-  ctx.fillText("F400 PTF", cx, cy-3);
-  // Kalinka riding shotgun, leaning with the corner
-  const lean = -steer*2;
-  ctx.fillStyle="#e09a4a"; ctx.fillRect(cx+w*0.10+t+lean, cy-h-1, 8, 8);
-  ctx.fillStyle="#c47a34";
-  ctx.fillRect(cx+w*0.10+t+lean, cy-h-3, 2, 3);
-  ctx.fillRect(cx+w*0.10+t+lean+6, cy-h-3, 2, 3);
-  ctx.fillStyle="#000"; ctx.fillRect(cx+w*0.10+t+lean+2, cy-h+2, 1, 1);
-  ctx.fillRect(cx+w*0.10+t+lean+5, cy-h+2, 1, 1);
-  ctx.restore();
-  // tyre smoke when it is properly sideways
+  ctx.fillRect(rx0+rearW*0.10, roof+5, Math.max(2,4*q), 17);
+  ctx.fillRect(rx1-rearW*0.10-Math.max(2,4*q), roof+5, Math.max(2,4*q), 17);
+  box(rx0, top, rearW, H-4, "#a81c14");
+  ctx.fillStyle="#c4241a"; ctx.fillRect(rx0+3*q, top+2, rearW-6*q, H-9);
+  ctx.fillStyle="#20242c"; ctx.fillRect(rx0+3*q, top, rearW-6*q, 3);
+  if (rearW > 14){
+    box(rx0+3*q,             top+6, 10*q, 13, "#e0402a");
+    box(rx1-3*q-10*q,        top+6, 10*q, 13, "#e0402a");
+    ctx.fillStyle="#ffb03a";
+    ctx.fillRect(rx0+4*q, top+7, 8*q, 4);
+    ctx.fillRect(rx1-4*q-8*q, top+7, 8*q, 4);
+    if (input.down){ ctx.fillStyle="#ff5a3c";
+      ctx.fillRect(rx0+4*q, top+12, 8*q, 6); ctx.fillRect(rx1-4*q-8*q, top+12, 8*q, 6); }
+  }
+  if (rearW > 22){
+    box(cx0plate(rx0,rearW), cy-4, 26*q, 8, "#f0d84a");
+    ctx.fillStyle="#20242c"; ctx.font="bold "+Math.max(4,Math.round(6*q))+"px ui-monospace, monospace";
+    ctx.textAlign="center"; ctx.textBaseline="top";
+    ctx.fillText("F400 PTF", rx0+rearW/2, cy-3);
+  }
+
+  /* ---- who is in it. UK car, so the driver sits on the right as you
+          look at the back of it, and Kalinka rides on the left. ---- */
+  if (rearW > 12){
+    const gy = roof + 7, lean = -clamp(state.slip,-0.5,0.5)*4;
+    const dx = rx0 + rearW*0.66, kx = rx0 + rearW*0.22;
+    ctx.fillStyle="#c8a074";                                 // driver
+    ctx.fillRect(dx-3*q+lean, gy, Math.max(2,7*q), 8);
+    ctx.fillStyle="#3a2a1e";
+    ctx.fillRect(dx-3*q+lean, gy, Math.max(2,7*q), 3);
+    ctx.fillStyle="#e09a4a";                                 // Kalinka
+    ctx.fillRect(kx-3*q+lean, gy+1, Math.max(2,7*q), 7);
+    ctx.fillStyle="#c47a34";
+    ctx.fillRect(kx-3*q+lean, gy-1, Math.max(1,2*q), 3);
+    ctx.fillRect(kx+2*q+lean,  gy-1, Math.max(1,2*q), 3);
+  }
+
+  // tyre smoke once it is properly sideways
   if (state.sliding && Math.abs(state.slip) > SLIP_LINK){
-    const a = clamp(Math.abs(state.slip)*1.6, 0, 0.5);
-    ctx.fillStyle = "rgba(228,224,214,"+a.toFixed(2)+")";
-    for (let i=0;i<5;i++){
-      const sx = cx + state.slip*46 - state.slip*(30+i*22) + rnd(-5,5);
-      const sy = cy + 6 - i*3 + rnd(-2,2);
-      ctx.fillRect(sx, sy, 7+i*3, 4+i);
+    const a = clamp(Math.abs(state.slip)*1.5, 0, 0.55);
+    ctx.fillStyle = "rgba(232,228,220,"+a.toFixed(2)+")";
+    for (let i=0;i<6;i++){
+      const sx = cx - nose*(24+i*20) + rnd(-5,5);
+      const sy = cy + 5 - i*3 + rnd(-2,2);
+      ctx.fillRect(sx, sy, 8+i*3, 4+i);
     }
   }
 }
+function cx0plate(rx0,rearW){ return rx0 + rearW/2 - 13*(rearW/54); }
 
 /* The beam starts at the bumper and swings with the wheel. Before, it was
    anchored to the vanishing point of the furthest visible road segment,

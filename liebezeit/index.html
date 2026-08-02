@@ -59,7 +59,7 @@
       background: radial-gradient(circle at 50% 30%, rgba(10,8,30,0.30), rgba(4,3,14,0.76) 82%);
     }
 
-    .wrap { width: 100%; max-width: 760px; margin: auto;
+    .wrap { width: 100%; max-width: 460px; margin: auto;
       padding: 18px 10px 26px; display: flex; justify-content: center; }
 
     .cabinet {
@@ -90,8 +90,8 @@
     .bezel { background: linear-gradient(160deg, #101736, #05081a); border-radius: 12px; padding: 12px;
       box-shadow: inset 0 2px 6px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.06); }
     /* 320x224 internal buffer */
-    .screen-viewport { position: relative; width: 100%; aspect-ratio: 10 / 7;
-      max-height: 78vh; display: flex; justify-content: center; align-items: center;
+    .screen-viewport { position: relative; width: 100%; aspect-ratio: 7 / 10;
+      max-height: 72vh; display: flex; justify-content: center; align-items: center;
       background: #000; border-radius: 8px; overflow: hidden;
       touch-action: none; -webkit-user-select: none; user-select: none; }
     #screen { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
@@ -102,7 +102,8 @@
       font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
       color: #0a0a14; background: rgba(255,255,255,0.86); touch-action: none;
       box-shadow: 0 5px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5); }
-    .pad-gas { background: var(--button-amber); color: #241000; flex: 1.3; }
+    .pad-gas { background: var(--button-amber); color: #241000; flex: 1.2; }
+    .pad-brake { background: #d8d2c4; color: #241000; }
     .pad:active { transform: translateY(1px); filter: brightness(0.92); }
     @media (pointer: coarse) { .pads { display: flex; } }
 
@@ -165,6 +166,7 @@
 
       <div class="pads">
         <button class="pad pad-left" aria-label="Steer left">&#9664;</button>
+        <button class="pad pad-brake" aria-label="Brake">Brake</button>
         <button class="pad pad-gas" aria-label="Accelerate">Gas</button>
         <button class="pad pad-right" aria-label="Steer right">&#9654;</button>
       </div>
@@ -186,7 +188,7 @@
       <div id="newsletter-error" class="newsletter-feedback">Please enter a valid email address.</div>
 
       <div class="hull-foot">
-        Liebezeit &middot; a beat-locked road game, 85 BPM &middot; arrows or A-D to steer, up and down for the pedal, M for the click track<br />
+        Liebezeit &middot; arrows to steer, up and down for the pedal &middot; commit to a corner and it lets go<br />
         Music and design by Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact@lagunaseca70.com</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
       </div>
     </div>
@@ -235,114 +237,138 @@ const FOV          = 108;
 const CAM_DEPTH    = 1 / Math.tan((FOV / 2) * Math.PI / 180);
 const PLAYER_Z     = CAM_HEIGHT * CAM_DEPTH;
 const BASE_SPEED   = SEGS_PER_BAR * SEGLEN / BAR;   // 7933 units/s
-const THROTTLE_MIN = 0.82;
-const THROTTLE_MAX = 1.15;
-/* The servo must out-authority the pedal or a player who holds the brake
-   drifts off the composed road for good. Gain 0.7 settles in ~4 s with a
-   standing error around a third of a bar, which nobody can feel. */
-const SERVO_GAIN   = 0.70;
-const SERVO_LO     = 0.80;
-const SERVO_HI     = 1.28;
+const THROTTLE_MIN = 0.58;
+const THROTTLE_MAX = 1.26;
+/* No servo. Speed is the player's, sections arrive when the music says so,
+   and the road is composed but experienced at your own pace. */
 /* Clean driving should bank time but not snowball, so the clock is capped
    the way an OutRun checkpoint would cap it. */
 const TIME_CAP     = 50;
-/* Tuned together: at the Corkscrew (curve 5.25) centrifugal pull is about
-   1.7 road-widths/s against 2.6 of steering, so the corner pushes hard but
-   can be held. Change one and you must recheck the other. */
-const STEER_RATE   = 2.6;
-const CENTRIFUGAL  = 0.0000265;
+/* ---- drift ------------------------------------------------------
+   The car now has a yaw angle and a lateral velocity, and the gap
+   between where it points and where it is going IS the slide.
+   No handbrake: traction lets go on its own when you ask too much of
+   it, which is what makes committing to a corner a decision. */
+const MAX_YAW      = 0.46;    // rad of steering lock
+const YAW_IN       = 7.0;     // how fast the wheel goes on
+const YAW_BACK     = 5.5;     // and comes off
+const GRIP_HOLD    = 17.0;    // lateral grip when stuck: crisp, not vague
+const GRIP_SLIDE   = 1.7;     // and when it has let go
+const LAT_K        = 1.35;    // yaw -> lateral demand
+const CURVE_LOAD   = 0.085;   // the corner itself loads the tyres too
+/* Full lock on a straight at full speed comes to about 0.72, which is
+   under the limit, so the car GRIPS and steers precisely. It is the
+   corner that pushes you over: a hard bend adds its own load, and taken
+   flat out the total passes 1.0 and the rear lets go. Braking on the way
+   in drops the load and you can take the same corner stuck down. That
+   choice is the mechanic. */
+const BREAK_AT     = 1.02;
+const HOLD_AT      = 0.58;
+const SLIDE_YAW    = 3.10;    // the tail keeps coming round
+const CENTRIFUGAL  = 0.0000300;
+const SLIP_LINK    = 0.13;    // slip angle that counts as a real drift
+
+/* ---- the chain ladder -------------------------------------------
+   Seven notes rising to the octave, then the octave held. Root is a
+   placeholder until Mike confirms the key; change CHAIN_ROOT and
+   CHAIN_SCALE and everything follows. */
+const CHAIN_ROOT  = 415.30;                 // G#4
+const CHAIN_SCALE = [0,2,3,5,7,9,10,12];    // G# Dorian: G# A# B C# D# E# F# G#
+const CHAIN_CAP   = CHAIN_SCALE.length - 1; // the octave
 
 /* ---------- internal resolution (OutRun's own) ------------------ */
-const VW = 320, VH = 224;
+const VW = 224, VH = 320;   // portrait, matching Dark Star and Sneca
 
 /* ============================================================
    SECTIONS — the arrangement, bar for bar
    ============================================================ */
+/* One day. The eclipse sits where the music goes dark, so the blackout
+   explains itself instead of being an arbitrary night. */
 const SECTIONS = [
- { bar:1,  name:"INTRO",          place:"FIRST LIGHT",
-   speed:0.80, curve:0.25, hill:0.30, density:0.5, fx:null, night:false,
-   sky:["#1b2f8c","#ff8a4a"], mtn:"#4a2a7a", haze:"#ffb86a",
-   ground:["#2f9a52","#278a47"], rumble:["#ffffff","#e0342c"],
-   road:["#6e6e78","#67676f"], lane:"#ffffff", obj:["#1e7a3c","#146030","#8a4a2a"] },
+ { bar:1,  weather:"mist",    curve:0.35, hill:0.30, density:0.5,
+   sky:["#2b3f70","#c98a6a"], mtn:"#3a3358", haze:"#d9a888",
+   ground:["#2f7a4e","#276b45"], rumble:["#ffffff","#e0342c"],
+   road:["#6a6a74","#63636d"], lane:"#ffffff", obj:["#1e6a3c","#155230","#7a4a2a"] },
 
- { bar:5,  name:"BASS ARRIVES",   place:"FOOT DOWN",
-   speed:0.86, curve:0.32, hill:0.45, density:0.5, fx:null, night:false,
-   sky:["#2145b8","#ffab5c"], mtn:"#53309a", haze:"#ffc27e",
-   ground:["#34ab5c","#2b9a50"], rumble:["#ffffff","#e0342c"],
-   road:["#71717c","#6a6a74"], lane:"#ffffff", obj:["#228a44","#166a36","#9a5430"] },
+ { bar:5,  weather:"mist",    curve:0.42, hill:0.45, density:0.5,
+   sky:["#2d55a8","#ffab72"], mtn:"#443a72", haze:"#f0b487",
+   ground:["#33915a","#2b804e"], rumble:["#ffffff","#e0342c"],
+   road:["#6e6e78","#676771"], lane:"#ffffff", obj:["#22803e","#166432","#8a5430"] },
 
- { bar:9,  name:"OFF BEAT",       place:"DUB COAST",
-   speed:0.92, curve:0.58, hill:0.45, density:1, fx:null, night:false,
-   sky:["#1a8fe0","#8fdcff"], mtn:"#2f6fb0", haze:"#b4e8ff",
+ { bar:9,  weather:"clear",   curve:0.62, hill:0.45, density:1,
+   sky:["#1a8fe0","#9fe2ff"], mtn:"#2f6fb0", haze:"#c4ecff",
    ground:["#3cbf60","#31a852"], rumble:["#ffffff","#e0342c"],
    road:["#74747f","#6d6d77"], lane:"#ffffff", obj:["#1f9c46","#137a36","#e0c23a"] },
 
- { bar:17, name:"THE DROP",       place:"MOTORIK MILE",
-   speed:1.00, curve:0.92, hill:0.72, density:1, fx:null, night:false,
-   sky:["#e02a1c","#ffc21e"], mtn:"#8a2050", haze:"#ff8a1e",
-   ground:["#d4922e","#bd7f26"], rumble:["#ffffff","#e0342c"],
-   road:["#76707c","#6f6975"], lane:"#ffffff", obj:["#a8521e","#8a3f16","#2f8a44"] },
+ { bar:17, weather:"dust",    curve:0.95, hill:0.72, density:1,
+   sky:["#2f9ad8","#ffd98a"], mtn:"#8a6a48", haze:"#ffd77a",
+   ground:["#d4a23e","#bd8c30"], rumble:["#ffffff","#e0342c"],
+   road:["#8a7c62","#83755b"], lane:"#fff4d0", obj:["#a8702a","#8a5620","#3c8a44"] },
 
- { bar:25, name:"SYNTH CRY",      place:"RAINBOW ARCH",
-   speed:1.00, curve:0.52, hill:0.55, density:1, fx:"rainbow", night:false,
-   sky:["#b02aa8","#ffab3a"], mtn:"#6a2090", haze:"#ff8ad0",
-   ground:["#3cae86","#309a74"], rumble:["#ffffff","#e0342c"],
-   road:["#78727e","#716b77"], lane:"#ffffff", obj:["#7a34a8","#5e2688","#e0c23a"] },
+ { bar:25, weather:"rainbow", curve:0.70, hill:0.55, density:1,
+   sky:["#4a6ea8","#e8c890"], mtn:"#4a5a80", haze:"#e8d0b0",
+   ground:["#3ca868","#309255"], rumble:["#ffffff","#e0342c"],
+   road:["#70707a","#696973"], lane:"#ffffff", obj:["#218a48","#166a36","#c4a83a"] },
 
- { bar:29, name:"TOP MELODIES",   place:"CLOUD DECK",
-   speed:0.96, curve:0.62, hill:0.85, density:1, fx:"clouds", night:false,
-   sky:["#1f7fd4","#d4efff"], mtn:"#3a63a8", haze:"#e0f2ff",
-   ground:["#34b45e","#2b9e50"], rumble:["#ffffff","#e0342c"],
-   road:["#74747f","#6d6d77"], lane:"#ffffff", obj:["#1f9c46","#137a36","#e8e2c8"] },
+ { bar:29, weather:"rain",    curve:0.78, hill:0.85, density:1,
+   sky:["#3a4a62","#6a7a8e"], mtn:"#2e3a4e", haze:"#8a98a8",
+   ground:["#2a6a44","#245c3c"], rumble:["#e8eef4","#c4302a"],
+   road:["#4a5058","#444a52"], lane:"#d8e8f4", obj:["#175a30","#114526","#5a6a3a"] },
 
- { bar:33, name:"STRIP BACK",     place:"THE LONG GROOVE",
-   speed:0.94, curve:0.22, hill:0.25, density:0.5, fx:null, night:false,
-   sky:["#ff9c1e","#ffe08a"], mtn:"#c46a2a", haze:"#ffd47a",
-   ground:["#e0a832","#c68f28"], rumble:["#ffffff","#e0342c"],
-   road:["#7e7870","#77716a"], lane:"#ffffff", obj:["#b4762a","#96601f","#3c9a52"] },
+ { bar:33, weather:"clearing",curve:0.55, hill:0.30, density:0.5,
+   sky:["#5a86c0","#ffd9a0"], mtn:"#4a6a90", haze:"#e0d4b8",
+   ground:["#37a85c","#2e9450"], rumble:["#ffffff","#e0342c"],
+   road:["#5e6068","#585a62"], lane:"#ffffff", obj:["#1d8a44","#136a34","#d0b03a"] },
 
- { bar:45, name:"SYNTHS RETURN",  place:"SIGNAL HILL",
-   speed:0.98, curve:0.62, hill:0.72, density:1, fx:null, night:false,
-   sky:["#d43a20","#ffb44a"], mtn:"#8a2f60", haze:"#ff9c3a",
-   ground:["#c4863a","#ad7230"], rumble:["#ffffff","#e0342c"],
-   road:["#77717d","#706a76"], lane:"#ffffff", obj:["#9c4a20","#7e3818","#2f8a44"] },
+ { bar:45, weather:"clear",   curve:0.80, hill:0.72, density:1,
+   sky:["#c46a3a","#ffcf88"], mtn:"#7a4a58", haze:"#ffab62",
+   ground:["#a8883c","#948030"], rumble:["#ffffff","#e0342c"],
+   road:["#77717d","#706a76"], lane:"#ffffff", obj:["#8a5a24","#6e4620","#2f8a44"] },
 
- { bar:49, name:"BUILDING",       place:"STARFIELD CLIMB",
-   speed:1.02, curve:0.72, hill:0.92, density:1, fx:"stars", night:false,
-   sky:["#1e1470","#c42a70"], mtn:"#3a1a80", haze:"#e04a86",
-   ground:["#4a3a8a","#3e307a"], rumble:["#ffe8f4","#e0342c"],
-   road:["#5e5a76","#575370"], lane:"#ffe8f4", obj:["#34246a","#281b56","#c42a70"] },
+ { bar:49, weather:"eclipse", curve:0.88, hill:0.92, density:1,
+   sky:["#4a4a86","#c08a70"], mtn:"#443a68", haze:"#b08a80",
+   ground:["#4a7a54","#3e6a48"], rumble:["#e8e0d0","#c4302a"],
+   road:["#5e5e6a","#575764"], lane:"#e8e4d8", obj:["#2a5a38","#1e4630","#7a6a44"] },
 
- { bar:61, name:"BREAKDOWN",      place:"BLACKOUT",
-   speed:0.86, curve:0.35, hill:0.30, density:0.5, fx:"stars", night:true,
-   sky:["#03050f","#0a1024"], mtn:"#0a0c1c", haze:"#101a34",
-   ground:["#0c1218","#0a0f14"], rumble:["#4a4a44","#3a1e1c"],
-   road:["#1c1c22","#19191f"], lane:"#6a6458", obj:["#0a100c","#0d1410","#101a14"] },
+ { bar:61, weather:"totality",curve:0.42, hill:0.30, density:0.5,
+   sky:["#05060f","#0d1226"], mtn:"#0b0d1c", haze:"#141c34",
+   ground:["#0e1418","#0b1014"], rumble:["#5a5a50","#3a1e1c"],
+   road:["#1e1e26","#1a1a22"], lane:"#6a6458", obj:["#0a100c","#0d1410","#101a14"] },
 
- { bar:65, name:"FALSE DROP",     place:"KALINKA'S CROSSING",
-   speed:0.80, curve:0.20, hill:0.22, density:0.25, fx:"dog", night:true,
-   sky:["#02040c","#070a18"], mtn:"#070914","haze":"#0c1220",
-   ground:["#0a0e12","#080b0e"], rumble:["#4a4a44","#3a1e1c"],
-   road:["#1b1b1f","#18181c"], lane:"#665f52", obj:["#090c0a","#0c100d","#0f1411"] },
+ { bar:65, weather:"totality",curve:0.32, hill:0.22, density:0.25,
+   sky:["#04050d","#0b1020"], mtn:"#090b18", haze:"#101828",
+   ground:["#0c1216","#0a0e12"], rumble:["#5a5a50","#3a1e1c"],
+   road:["#1d1d24","#191920"], lane:"#665f52", obj:["#090c0a","#0c100d","#0f1411"] },
 
- { bar:69, name:"SECOND DROP",    place:"METEOR RUN",
-   speed:1.06, curve:0.95, hill:0.85, density:1, fx:"meteors", night:true,
-   sky:["#05102e","#183a86"], mtn:"#12245e", haze:"#2a4aa0",
-   ground:["#12203a","#0e1a30"], rumble:["#e8e0c0","#c4302a"],
-   road:["#26262e","#222229"], lane:"#d8d0b4", obj:["#101c34","#152340","#1e3050"] },
+ { bar:69, weather:"flood",   curve:1.00, hill:0.85, density:1,
+   sky:["#1a8fe0","#ffe8b0"], mtn:"#3a6aa0", haze:"#ffeec0",
+   ground:["#3cbf60","#31a852"], rumble:["#ffffff","#e0342c"],
+   road:["#7a7a86","#73737f"], lane:"#ffffff", obj:["#1f9c46","#137a36","#ffd23a"] },
 
- { bar:77, name:"THE SWELL",      place:"TOTAL ECLIPSE",
-   speed:1.06, curve:0.82, hill:0.92, density:1, fx:"eclipse", night:false,
-   sky:["#3a0e6a","#ff5424"], mtn:"#5e1a7a", haze:"#ff7a2a",
-   ground:["#8a3a5a","#76304c"], rumble:["#ffffff","#e0342c"],
-   road:["#6e5e74","#67576d"], lane:"#ffe0d0", obj:["#5a2270","#46195a","#ff8a3a"] },
+ { bar:77, weather:"sunset",  curve:0.88, hill:0.92, density:1,
+   sky:["#8a2a5a","#ff8a2a"], mtn:"#6a2a58", haze:"#ff7a3a",
+   ground:["#8a5a3a","#764c30"], rumble:["#ffffff","#e0342c"],
+   road:["#6e6068","#675960"], lane:"#ffe8d0", obj:["#7a3a30","#5e2c26","#ff9a3a"] },
 
- { bar:93, name:"OUTRO",          place:"HOME STRAIGHT",
-   speed:0.84, curve:0.22, hill:0.32, density:0.5, fx:"stars", night:false,
-   sky:["#1b2f8c","#ffa060"], mtn:"#4a2a7a", haze:"#ffc086",
-   ground:["#2f9a52","#278a47"], rumble:["#ffffff","#e0342c"],
-   road:["#6e6e78","#67676f"], lane:"#ffffff", obj:["#1e7a3c","#146030","#8a4a2a"] },
+ { bar:93, weather:"dusk",    curve:0.40, hill:0.32, density:0.5,
+   sky:["#1b2a56","#a86a6a"], mtn:"#2c2a48", haze:"#c48a80",
+   ground:["#2a4a44","#23403a"], rumble:["#d8d0c0","#c4302a"],
+   road:["#4b4b55","#474751"], lane:"#d4cfbc", obj:["#1a3a2c","#143020","#4a4a5a"] },
 ];
+
+/* Daylight as a smooth curve rather than a step per section, so the
+   eclipse creeps in over twelve bars instead of switching on. */
+const LIGHT_KEYS = [[1,0.50],[6,0.80],[9,1.00],[26,1.00],[29,0.62],[33,0.80],
+                    [45,0.95],[49,0.92],[55,0.70],[58,0.40],[61,0.17],[68,0.17],
+                    [70,1.05],[77,0.92],[88,0.70],[93,0.46],[97,0.30]];
+function lightAt(barF){
+  let a=LIGHT_KEYS[0], b=LIGHT_KEYS[LIGHT_KEYS.length-1];
+  for(let i=0;i<LIGHT_KEYS.length-1;i++){
+    if(barF>=LIGHT_KEYS[i][0] && barF<=LIGHT_KEYS[i+1][0]){ a=LIGHT_KEYS[i]; b=LIGHT_KEYS[i+1]; break; }
+  }
+  const t=(b[0]===a[0])?0:clamp((barF-a[0])/(b[0]-a[0]),0,1);
+  return lerp(a[1], b[1], t*t*(3-2*t));
+}
 
 /* ============================================================
    THE ROAD — composed, one row per bar of music.
@@ -351,32 +377,31 @@ const SECTIONS = [
    e = caption for a notable bar
    ============================================================ */
 const ROAD = [
-/*  1 */ {c: 0.0, h: 0.15}, {c: 0.0, h: 0.20}, {c: 0.3, h: 0.15}, {c:-0.3, h: 0.00},
-/*  5 */ {c: 0.8, h: 0.35}, {c: 0.6, h: 0.10}, {c:-0.7, h:-0.30}, {c:-0.4, h:-0.15},
-/*  9 */ {c:-1.0, h: 0.25}, {c: 1.1, h: 0.10}, {c: 0.7, h:-0.35}, {c:-1.2, h:-0.20},
-/* 13 */ {c:-0.8, h: 0.40}, {c: 1.3, h: 0.25}, {c: 0.9, h:-0.30}, {c: 0.0, h:-0.45},
-/* 17 */ {c: 2.4, h: 0.55}, {c:-2.6, h:-0.20}, {c:-1.8, h:-0.50}, {c: 2.2, h: 0.30},
-/* 21 */ {c: 0.0, h:-0.70}, {c:-2.8, h: 0.25}, {c: 2.5, h: 0.45}, {c: 1.4, h:-0.30},
-/* 25 */ {c: 1.5, h: 0.45}, {c: 1.6, h: 0.40}, {c: 1.4, h: 0.30}, {c: 1.0, h: 0.20},
-/* 29 */ {c:-1.3, h: 0.85}, {c: 1.1, h:-0.75}, {c:-0.9, h: 0.80}, {c: 1.5, h:-0.60},
-/* 33 */ {c: 0.0, h:-0.20}, {c: 0.0, h:-0.15}, {c: 0.2, h: 0.00}, {c: 0.3, h: 0.00},
-/* 37 */ {c: 0.0, h: 0.10}, {c:-0.2, h: 0.00}, {c:-0.3, h: 0.00},
-/* 40 */ {c:-0.9, h:-0.10, e:"THE KINK"},
-/* 41 */ {c:-0.5, h: 0.00}, {c: 0.2, h: 0.10}, {c: 0.0, h: 0.15}, {c: 0.0, h: 0.20},
-/* 45 */ {c: 1.7, h: 0.40}, {c:-1.5, h: 0.25}, {c: 1.9, h: 0.45}, {c:-1.3, h: 0.30},
-/* 49 */ {c: 0.9, h: 0.50}, {c:-1.0, h: 0.45}, {c: 1.2, h: 0.55}, {c:-1.1, h: 0.50},
-/* 53 */ {c: 1.5, h: 0.60}, {c:-1.4, h: 0.55}, {c: 1.8, h: 0.65}, {c:-1.7, h: 0.60},
-/* 57 */ {c: 2.1, h: 0.70}, {c:-2.0, h: 0.65}, {c: 2.3, h: 0.75}, {c:-1.2, h: 0.30},
-/* 61 */ {c: 0.0, h:-0.30}, {c: 0.4, h:-0.20}, {c:-0.4, h:-0.10}, {c: 0.0, h: 0.00},
-/* 65 */ {c: 0.0, h: 0.00}, {c: 0.0, h: 0.00}, {c: 0.0, h: 0.00}, {c: 0.0, h: 0.00},
-/* 69 */ {c: 2.6, h:-0.40}, {c:-2.9, h: 0.30}, {c: 2.4, h:-0.55}, {c:-2.7, h: 0.20},
-/* 73 */ {c: 3.0, h:-0.60}, {c:-2.5, h: 0.35}, {c: 2.8, h:-0.45}, {c:-1.8, h: 0.15},
-/* 77 */ {c: 2.0, h: 0.55}, {c: 1.6, h: 0.40}, {c:-1.9, h: 0.30}, {c:-1.5, h: 0.50},
-/* 81 */ {c: 2.2, h: 0.60}, {c: 1.7, h: 0.35}, {c:-2.0, h: 0.45}, {c:-1.4, h: 0.70},
-/* 85 */ {c:-3.0, h: 0.20, e:"THE CORKSCREW"},
-/* 86 */ {c: 3.0, h:-0.95}, {c:-2.2, h:-0.85}, {c: 1.5, h:-0.40},
-/* 89 */ {c:-1.8, h: 0.25}, {c: 2.0, h: 0.20}, {c:-1.6, h: 0.00}, {c: 0.8, h:-0.15},
-/* 93 */ {c: 0.0, h: 0.10}, {c: 0.3, h: 0.05}, {c:-0.2, h: 0.00}, {c: 0.0, h: 0.00},
+/*  1 */ {c: 0.4, h: 0.15}, {c:-0.5, h: 0.20}, {c: 0.7, h: 0.15}, {c:-0.6, h: 0.00},
+/*  5 */ {c: 1.2, h: 0.35}, {c:-1.0, h: 0.10}, {c: 1.3, h:-0.30}, {c:-0.9, h:-0.15},
+/*  9 */ {c:-1.6, h: 0.25}, {c: 1.7, h: 0.10}, {c: 1.2, h:-0.35}, {c:-1.8, h:-0.20},
+/* 13 */ {c:-1.4, h: 0.40}, {c: 1.9, h: 0.25}, {c: 1.5, h:-0.30}, {c:-1.1, h:-0.45},
+/* 17 */ {c: 2.6, h: 0.55}, {c:-2.8, h:-0.20}, {c:-2.0, h:-0.50}, {c: 2.4, h: 0.30},
+/* 21 */ {c: 1.2, h:-0.70}, {c:-2.9, h: 0.25}, {c: 2.7, h: 0.45}, {c: 1.8, h:-0.30},
+/* 25 */ {c: 2.0, h: 0.45}, {c:-1.6, h: 0.40}, {c: 2.2, h: 0.30}, {c:-1.4, h: 0.20},
+/* 29 */ {c:-2.1, h: 0.85}, {c: 1.9, h:-0.75}, {c:-1.7, h: 0.80}, {c: 2.3, h:-0.60},
+/* 33 */ {c: 0.5, h:-0.20}, {c:-0.4, h:-0.15}, {c: 1.4, h: 0.00}, {c:-1.6, h: 0.00},
+/* 37 */ {c: 0.6, h: 0.10}, {c:-1.2, h: 0.00}, {c: 1.5, h: 0.00},
+/* 40 */ {c:-2.2, h:-0.10},
+/* 41 */ {c:-1.3, h: 0.00}, {c: 1.1, h: 0.10}, {c:-0.7, h: 0.15}, {c: 0.6, h: 0.20},
+/* 45 */ {c: 2.1, h: 0.40}, {c:-1.9, h: 0.25}, {c: 2.3, h: 0.45}, {c:-1.7, h: 0.30},
+/* 49 */ {c: 1.4, h: 0.50}, {c:-1.5, h: 0.45}, {c: 1.7, h: 0.55}, {c:-1.6, h: 0.50},
+/* 53 */ {c: 2.0, h: 0.60}, {c:-1.9, h: 0.55}, {c: 2.2, h: 0.65}, {c:-2.1, h: 0.60},
+/* 57 */ {c: 2.5, h: 0.70}, {c:-2.4, h: 0.65}, {c: 2.7, h: 0.75}, {c:-1.6, h: 0.30},
+/* 61 */ {c: 0.8, h:-0.30}, {c:-0.9, h:-0.20}, {c: 1.0, h:-0.10}, {c:-0.8, h: 0.00},
+/* 65 */ {c: 0.5, h: 0.00}, {c:-0.6, h: 0.00}, {c: 0.7, h: 0.00}, {c:-0.5, h: 0.00},
+/* 69 */ {c: 2.8, h:-0.40}, {c:-3.0, h: 0.30}, {c: 2.6, h:-0.55}, {c:-2.9, h: 0.20},
+/* 73 */ {c: 3.1, h:-0.60}, {c:-2.7, h: 0.35}, {c: 3.0, h:-0.45}, {c:-2.2, h: 0.15},
+/* 77 */ {c: 2.4, h: 0.55}, {c:-2.0, h: 0.40}, {c: 2.3, h: 0.30}, {c:-1.9, h: 0.50},
+/* 81 */ {c: 2.6, h: 0.60}, {c:-2.1, h: 0.35}, {c: 2.4, h: 0.45}, {c:-1.8, h: 0.70},
+/* 85 */ {c:-3.2, h: 0.20}, {c: 3.2, h:-0.95}, {c:-2.6, h:-0.85}, {c: 1.9, h:-0.40},
+/* 89 */ {c:-2.2, h: 0.25}, {c: 2.4, h: 0.20}, {c:-2.0, h: 0.00}, {c: 1.2, h:-0.15},
+/* 93 */ {c: 0.7, h: 0.10}, {c:-0.8, h: 0.05}, {c: 0.6, h: 0.00}, {c:-0.5, h: 0.00},
 ];
 
 function sectionForBar(bar){
@@ -473,6 +498,19 @@ const Audio8 = {
     o.connect(g); g.connect(this.master);
     o.start(t); o.stop(t+dur+0.02);
   },
+  /* one rung of the ladder */
+  note(step, extra){
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime + 0.005;
+    const semi = CHAIN_SCALE[Math.min(step, CHAIN_CAP)];
+    const f = CHAIN_ROOT * Math.pow(2, semi/12);
+    this.tone(t, f, 0.30, "triangle", 0.16);
+    this.tone(t, f*2, 0.16, "sine", 0.07);
+    if (extra){                              // past the octave it shimmers
+      this.tone(t+0.055, f*2, 0.34, "sine", 0.05);
+      this.tone(t+0.110, f*3, 0.26, "sine", 0.03);
+    }
+  },
   hit(t, dur, gain, hp){
     const s = this.ctx.createBufferSource(); s.buffer = this.noise;
     const f = this.ctx.createBiquadFilter(); f.type="highpass"; f.frequency.value = hp||1200;
@@ -515,14 +553,16 @@ const state = {
   section:SECTIONS[0], prevSection:SECTIONS[0], blend:1,
   bar:1, musicT:0,
   position:0, playerX:0, speed:0, throttle:1,
+  yaw:0, vlat:0, slip:0, sliding:false, driftT:0,
   segments:[], genCurve:0, genY:0, genBar:0,
-  barStart:[], roadBarCursor:1, align:0,
+  barStart:[], roadBarCursor:1,
   scenery:[], traffic:[], meteors:[], fxQueue:[],
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
   banner:0, bannerSec:null, cue:"", cueT:0,
+  light:0.5, eclipse:0, night:false, rain:0, mist:1, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
-  hitFlash:0, snareFlash:0, kickFlash:0,
+  hitFlash:0, snareFlash:0, kickFlash:0, chain:0, chainT:0, pop:null, bestChain:0,
   crt:true, stars:[]
 };
 for (let i=0;i<180;i++) state.stars.push({x:Math.random(), y:Math.random()*0.55, b:Math.random()});
@@ -546,9 +586,9 @@ function pushSegment(y1, y2, curve){
    is deterministic; the speed servo in update() keeps the car on it. */
 function generateBar(){
   const b   = state.genBar + 1;
-  const sec = sectionForBar(Math.min(b, TOTAL_BARS));
-  const row = ROAD[b-1] || {c:0, h:0};              // run-out past bar 96
-  const n   = Math.max(40, Math.round(SEGS_PER_BAR * sec.speed));
+  const sec = sectionForBar(Math.min(((b-1)%TOTAL_BARS)+1, TOTAL_BARS));
+  const row = ROAD[((b-1)%TOTAL_BARS)] || {c:0, h:0};   // the road loops if you dawdle
+  const n   = SEGS_PER_BAR;
 
   state.barStart[b] = state.segments.length;
   const curveTarget = row.c * 1.75;
@@ -608,11 +648,7 @@ function spawnScenery(){
         tint: (Math.random()*3)|0, z:0
       });
     }
-    if (sec.fx === "dog" && down && (bar === 66 || bar === 67)){
-      state.scenery.push({ arrive, side:0, offset: rnd(-0.7,0.7),
-                           type:"dog", scale:1, tint:0, z:0, solid:true });
-    }
-    if (sec.fx === "meteors" && k === 0) state.fxQueue.push({ at:arrive, kind:"meteor" });
+
   }
 
   for (let i=state.fxQueue.length-1; i>=0; i--){
@@ -633,20 +669,20 @@ const CAR_HALF_W  = 0.155;          // matches the drawn sprite
 const CAR_HALF_Z  = SEGLEN * 0.9;
 
 function spawnTraffic(dt){
-  const want = state.section.night ? 3 : 4;
+  const want = state.night ? 5 : 7;
   if (state.traffic.length >= want) return;
-  if (Math.random() > dt * 1.3) return;
+  if (Math.random() > dt * 2.6) return;
 
   const z = state.position + PLAYER_Z + rnd(DRAW_DIST*0.55, DRAW_DIST*0.95)*SEGLEN;
   // which lanes are already taken anywhere near this stretch of road?
   const taken = new Set();
-  for (const c of state.traffic) if (Math.abs(c.z - z) < SEGLEN*45) taken.add(c.lane);
+  for (const c of state.traffic) if (Math.abs(c.z - z) < SEGLEN*26) taken.add(c.lane);
   const free = [0,1,2].filter(l => !taken.has(l));
   if (free.length <= 1) return;                    // always leave a gap
   const lane = free[(Math.random()*free.length)|0];
 
   state.traffic.push({
-    z, lane, offset: LANES[lane] + rnd(-0.05,0.05),
+    z, lane, offset: LANES[lane] + rnd(-0.16,0.16),
     speed: BASE_SPEED * rnd(0.40, 0.62),
     colour: (Math.random()*4)|0,
     racer: Math.random() < 0.22
@@ -679,39 +715,31 @@ function update(dt){
       state.prevSection = state.section;
       state.section = sec;
       state.blend = 0;
-      state.banner = 3.2;
-      state.bannerSec = sec;
       // checkpoint: section boundaries top the clock up
       const secBars = sectionEndBar(sec) - sec.bar;
       state.timeLeft = Math.min(TIME_CAP, state.timeLeft + secBars * BAR + 6);
       state.checkpointFlash = 0.9;
     }
-    const row = ROAD[bar-1];
-    if (row && row.e){ state.cue = row.e; state.cueT = 2.4; }
   }
   state.cueT = Math.max(0, state.cueT - dt);
   state.blend = Math.min(1, state.blend + dt / BAR);
+  state.light = lightAt(barF + 1);
+  const bf = barF + 1;
+  state.eclipse = bf<49 ? 0 : bf<61 ? (bf-49)/12 : bf<68 ? 1 : bf<72 ? 1-(bf-68)/4 : 0;
+  state.night = state.light < 0.32;
+  state.rain  = state.section.weather==="rain" ? 1
+              : state.section.weather==="clearing" ? clamp(1-(bf-33)/5,0,1) : 0;
+  state.mist  = state.section.weather==="mist" ? clamp(1-(bf-1)/9,0.25,1) : 0;
 
-  /* --- where is the car on the composed road, in bars? ------ */
+  /* --- speed is entirely the player's --------------------- */
   const playerSeg = Math.floor((state.position + PLAYER_Z)/SEGLEN);
   while (state.barStart[state.roadBarCursor+1] !== undefined &&
          playerSeg >= state.barStart[state.roadBarCursor+1]) state.roadBarCursor++;
-  const bs = state.barStart[state.roadBarCursor];
-  const be = state.barStart[state.roadBarCursor+1];
-  const roadBarF = state.roadBarCursor +
-    (be > bs ? clamp((playerSeg - bs)/(be - bs), 0, 1) : 0);
-  const musicBarF = barF + 1;
-
-  /* Servo: the composed bar you are driving must be the bar you are
-     hearing. Correction is capped so the player never feels it. */
-  state.align = musicBarF - roadBarF;
-  const servo = clamp(1 + clamp(state.align, -3, 3) * SERVO_GAIN, SERVO_LO, SERVO_HI);
-
-  /* --- speed: a band around the music-set base -------------- */
-  const target = BASE_SPEED * state.section.speed * state.throttle * servo;
-  const accel  = state.speed < target ? 3.2 : 5.0;
+  const target = BASE_SPEED * state.throttle;
+  const accel  = state.speed < target ? 2.2 : 7.5;   // slow to build, quick to shed
   state.speed += (target - state.speed) * clamp(accel*dt, 0, 1);
   if (state.crashT > 0){ state.crashT -= dt; state.speed *= (1 - 2.4*dt); }
+  if (state.sliding) state.speed *= (1 - Math.abs(state.slip)*0.55*dt);
   state.speed = Math.max(BASE_SPEED*0.12, state.speed);
 
   const dz = state.speed * dt;
@@ -720,15 +748,41 @@ function update(dt){
 
   /* --- steering + centrifugal ------------------------------- */
   const speedPct = state.speed / BASE_SPEED;
-  /* Steering keeps most of its authority when you lift off, while
-     centrifugal force scales with ground covered. That is what makes
-     braking into a corner worth doing. */
-  const steerRate = STEER_RATE * dt * clamp(speedPct, 0.6, 1.0);
-  if (input.left)  state.playerX -= steerRate;
-  if (input.right) state.playerX += steerRate;
+  /* --- yaw, grip and the slide ------------------------------ */
   const pSeg = segAt(state.position + PLAYER_Z);
+  const steer = (input.left?-1:0)+(input.right?1:0);
+  const yawTarget = steer * MAX_YAW;
+  const k = (Math.abs(yawTarget) > Math.abs(state.yaw) ? YAW_IN : YAW_BACK);
+  state.yaw += (yawTarget - state.yaw) * Math.min(1, k*dt);
+
+  /* A slide is unstable. Once the rear has let go the car keeps rotating,
+     faster the more sideways it already is, and the only thing that stops
+     it is you winding on opposite lock. Holding that balance IS the drift.
+     Steering authority (7/s) comfortably beats this (2.1/s), so it is
+     always catchable. */
+  if (state.sliding)
+    state.yaw += Math.sign(state.vlat || state.yaw) * SLIDE_YAW * dt
+               * clamp(Math.abs(state.vlat)*1.5, 0, 1);
+  state.yaw = clamp(state.yaw, -0.95, 0.95);
+
+  // total lateral load: what you are asking of it, plus what the bend is
+  const demand = Math.sin(state.yaw) * speedPct * LAT_K
+               + pSeg.curve * CURVE_LOAD * speedPct;
+    if (!state.sliding && Math.abs(demand) > BREAK_AT) state.sliding = true;
+  // it hooks up again when grip has caught the demand, not when slip is zero
+  if (state.sliding && Math.abs(demand) < HOLD_AT && Math.abs(demand - state.vlat) < 0.18)
+    state.sliding = false;
+
+  const grip = (state.sliding ? GRIP_SLIDE : GRIP_HOLD) * (Math.abs(state.playerX)>1.05 ? 0.55 : 1);
+  state.vlat += (demand - state.vlat) * Math.min(1, grip*dt);
+
+  // slip is the angle between where it points and where it is actually going
+  state.slip = state.yaw - Math.atan2(state.vlat, Math.max(0.25, speedPct)*LAT_K);
+
+  state.playerX += state.vlat * dt * 1.05;
   state.playerX -= pSeg.curve * dz * CENTRIFUGAL;
   state.playerX = clamp(state.playerX, -3.2, 3.2);
+  if (Math.abs(state.playerX) >= 3.19) state.vlat *= 0.3;
 
   // off the tarmac: drag
   if (Math.abs(state.playerX) > 1.05){
@@ -737,8 +791,8 @@ function update(dt){
   }
 
   /* --- throttle -------------------------------------------- */
-  const tTarget = input.up ? THROTTLE_MAX : (input.down ? THROTTLE_MIN : 0.94);
-  state.throttle += (tTarget - state.throttle) * clamp(2.6*dt, 0, 1);
+  const tTarget = input.up ? THROTTLE_MAX : (input.down ? THROTTLE_MIN : 0.90);
+  state.throttle += (tTarget - state.throttle) * clamp(3.4*dt, 0, 1);
 
   /* --- scenery: solve z so each object lands on its beat ---- */
   spawnScenery();
@@ -765,9 +819,24 @@ function update(dt){
     const dx  = Math.abs(c.offset - state.playerX);
     if (Math.abs(dzc) < CAR_HALF_Z && dx < CAR_HALF_W * 2){
       if (!c.bumped){ c.bumped = true; crash(1.0); }
-    } else if (Math.abs(dzc) < SEGLEN*2.5 && dx < 0.5 && dx > CAR_HALF_W*2 && !c.near){
-      c.near = true; state.score += 150;
+    } else if (Math.abs(dzc) < SEGLEN*2.5 && dx < 0.80 && dx > CAR_HALF_W*2 && !c.near){
+      /* A near miss. The tighter the gap and the faster you take it,
+         the more it is worth, and the chain keeps climbing. */
+      c.near = true;
+      const tight = clamp(1 - (dx - CAR_HALF_W*2) / (0.80 - CAR_HALF_W*2), 0, 1);
+      const fast  = clamp(state.speed / BASE_SPEED, 0, 1.3);
+      addLink(Math.round((70 + 200*tight) * fast));
     }
+  }
+
+  /* --- the chain: threading OR holding a slide -------------- */
+  if (state.sliding && Math.abs(state.slip) > SLIP_LINK && speedPct > 0.5){
+    state.driftT += dt;
+    state.chainT = 3.2;
+    // one link per beat held, so a long drift climbs the ladder in time
+    if (state.driftT >= BEAT){ state.driftT -= BEAT; addLink(Math.round(90 * speedPct)); }
+  } else {
+    state.driftT = 0;
   }
 
   /* --- meteors, flashes, clock ------------------------------ */
@@ -788,6 +857,9 @@ function update(dt){
   state.hitFlash   = Math.max(0, state.hitFlash   - dt*3.0);
   state.checkpointFlash = Math.max(0, state.checkpointFlash - dt*1.4);
   state.shake      = Math.max(0, state.shake - dt*4);
+  state.chainT = Math.max(0, state.chainT - dt);
+  if (state.chainT <= 0 && state.chain){ state.bestChain=Math.max(state.bestChain,state.chain); state.chain = 0; }
+  if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
   state.banner     = Math.max(0, state.banner - dt);
 
   state.score += state.speed * dt * 0.004;
@@ -795,7 +867,19 @@ function update(dt){
   if (state.timeLeft <= 0){ state.timeLeft = 0; gameOver(); }
 }
 
+function addLink(base){
+  state.chain++;
+  state.chainT = 3.2;
+  const step = Math.min(state.chain-1, CHAIN_CAP);
+  Audio8.note(step, state.chain > CHAIN_CAP+1);
+  const gain = Math.round(base * Math.min(state.chain, 30));
+  state.score += gain;
+  state.pop = { t:0.9, v:gain };
+}
+
 function crash(mag){
+  state.bestChain = Math.max(state.bestChain, state.chain);
+  state.chain = 0; state.chainT = 0;
   state.crashT = 0.45*mag;
   state.shake  = 4*mag;
   state.hitFlash = 1;
@@ -814,11 +898,12 @@ function startRun(){
   state.section = SECTIONS[0]; state.prevSection = SECTIONS[0]; state.blend = 1;
   state.bar=1; state.musicT=0; state.position=0; state.playerX=0;
   state.speed=BASE_SPEED*0.4; state.throttle=0.94;
+  state.yaw=0; state.vlat=0; state.slip=0; state.sliding=false; state.driftT=0;
   state.segments.length=0; state.genCurve=0; state.genY=0; state.genBar=0;
-  state.barStart.length=0; state.roadBarCursor=1; state.align=0;
+  state.barStart.length=0; state.roadBarCursor=1;
   state.scenery.length=0; state.traffic.length=0; state.meteors.length=0;
-  state.fxQueue.length=0; state.nextTick=0; state.lastTick=-1; state.timeLeft=32; state.score=0;
-  state.crashT=0; state.shake=0; state.banner=3.2; state.bannerSec=SECTIONS[0];
+  state.fxQueue.length=0; state.nextTick=0; state.lastTick=-1; state.timeLeft=34; state.score=0; state.chain=0; state.chainT=0; state.bestChain=0; state.pop=null;
+  state.crashT=0; state.shake=0; state.banner=0;
   ensureRoad();
   Audio8.start();
 }
@@ -865,69 +950,63 @@ function drawSky(horizon){
     ctx.fillStyle = mixHex(pal("sky",0), pal("sky",1), Math.pow(t0, 0.78));
     ctx.fillRect(0, Math.floor(t0*h), VW, Math.ceil((t1-t0)*h)+1);
   }
+  const w = state.section.weather;
 
-  const sec = state.section;
-
-  if (sec.fx === "stars" || sec.night){
-    const a = sec.night ? 1 : 0.6;
-    for (const s of state.stars){
-      const y = s.y*h;
-      if (y > h-2) continue;
-      const tw = 0.6 + 0.4*Math.sin(state.musicT*3.2 + s.b*30);
-      ctx.fillStyle = "rgba(255,252,240,"+(a*s.b*tw).toFixed(3)+")";
-      ctx.fillRect(Math.round(s.x*VW), Math.round(y), 1, 1);
+  if (state.light < 0.55){
+    const a = clamp((0.55-state.light)/0.45, 0, 1);
+    for (const st of state.stars){
+      const y = st.y*h; if (y > h-2) continue;
+      const tw = 0.6 + 0.4*Math.sin(state.musicT*3.2 + st.b*30);
+      ctx.fillStyle = "rgba(255,252,240,"+(a*st.b*tw).toFixed(3)+")";
+      ctx.fillRect(Math.round(st.x*VW), Math.round(y), 1, 1);
     }
   }
-  if (sec.fx === "eclipse"){
-    const cx = Math.round(VW/2 + state.playerX*-16), cy = Math.round(h-52), r = 27;
-    const cg = ctx.createRadialGradient(cx,cy,r*0.95, cx,cy,r*2.8);
-    cg.addColorStop(0,"rgba(255,238,190,0.95)");
-    cg.addColorStop(1,"rgba(255,120,40,0)");
-    ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(cx,cy,r*2.8,0,7); ctx.fill();
-    ctx.fillStyle="#120416"; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
-    ctx.strokeStyle="#fff6e0"; ctx.lineWidth=2;
+
+  /* The sun, with the moon crossing it. At full coverage it is the
+     corona, which is why the middle of the track goes dark. */
+  const cx = Math.round(VW/2 + state.playerX*-14);
+  const cy = Math.round(h-46), r = 24, e = state.eclipse;
+  if (e >= 0.999){
+    const cg = ctx.createRadialGradient(cx,cy,r*0.95, cx,cy,r*3.2);
+    cg.addColorStop(0,"rgba(255,240,200,0.95)");
+    cg.addColorStop(1,"rgba(255,150,60,0)");
+    ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(cx,cy,r*3.2,0,7); ctx.fill();
+    ctx.fillStyle="#0a0410"; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+    ctx.strokeStyle="#fff6e0"; ctx.lineWidth=2.5;
     ctx.beginPath(); ctx.arc(cx,cy,r+1,0,7); ctx.stroke();
-    ctx.strokeStyle="#000"; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.arc(cx,cy,r+2.5,0,7); ctx.stroke();
-  } else if (!sec.night){
-    // a flat sun disc with a black rim, the way a Sega board would draw it
-    const cx = Math.round(VW/2 + state.playerX*-14), cy = Math.round(h-40), r = 22;
-    ctx.fillStyle = "#ffb42a"; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
-    ctx.fillStyle = "#ffe066"; ctx.beginPath(); ctx.arc(cx,cy,r-5,0,7); ctx.fill();
-    ctx.fillStyle = "#fff6c8"; ctx.beginPath(); ctx.arc(cx,cy,r-11,0,7); ctx.fill();
-    ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5;
+  } else if (w!=="rain") {
+    ctx.fillStyle="#ffb42a"; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+    ctx.fillStyle="#ffe066"; ctx.beginPath(); ctx.arc(cx,cy,r-5,0,7); ctx.fill();
+    ctx.fillStyle="#fff6c8"; ctx.beginPath(); ctx.arc(cx,cy,r-11,0,7); ctx.fill();
+    if (e > 0.001){                                    // the bite
+      ctx.fillStyle=pal("sky",1);
+      ctx.beginPath(); ctx.arc(cx - r*2 + e*r*2.6, cy - r*0.35, r*1.02, 0, 7); ctx.fill();
+    }
+    ctx.strokeStyle="#000"; ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.stroke();
   }
-  if (sec.fx === "rainbow"){
-    const cx = VW/2, cy = h+44, cols=["#ff2a2a","#ff8a1e","#ffe81e","#3ad44e","#1e8aff","#a03aff"];
+
+  if (w === "rainbow"){
+    const rx = VW/2, ry = h+44, cols=["#ff2a2a","#ff8a1e","#ffe81e","#3ad44e","#1e8aff","#a03aff"];
     for (let i=0;i<cols.length;i++){
-      ctx.strokeStyle = cols[i]; ctx.globalAlpha = 0.85; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.arc(cx, cy, 104 - i*4, Math.PI, 2*Math.PI); ctx.stroke();
+      ctx.strokeStyle = cols[i]; ctx.globalAlpha = 0.75; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(rx, ry, 104 - i*4, Math.PI, 2*Math.PI); ctx.stroke();
     }
     ctx.globalAlpha = 1;
   }
-  if (sec.fx === "clouds"){
-    for (let i=0;i<7;i++){
-      const y = Math.round(h - 34 - i*12);
-      const x = Math.round(((state.musicT*9 + i*77) % (VW+140)) - 70);
-      const w = 66 - i*5;
-      ctx.fillStyle = "#ffffff"; ctx.fillRect(x, y, w, 6); ctx.fillRect(x+14, y-5, w*0.55, 5);
-      ctx.strokeStyle = "#000"; ctx.lineWidth = 1;
-      ctx.strokeRect(x+0.5, y+0.5, w-1, 5); ctx.strokeRect(x+14.5, y-4.5, w*0.55-1, 4);
+  if (w === "rain" || w === "clearing" || w === "rainbow"){
+    for (let i=0;i<8;i++){
+      const y = Math.round(h - 30 - i*11);
+      const x = Math.round(((state.musicT*7 + i*67) % (VW+140)) - 70);
+      const ww = 70 - i*5;
+      ctx.fillStyle = w==="rain" ? "#3a4454" : "#ffffff";
+      ctx.globalAlpha = w==="rain" ? 0.85 : 0.5;
+      ctx.fillRect(x, y, ww, 6); ctx.fillRect(x+14, y-5, ww*0.55, 5);
+      ctx.globalAlpha = 1;
     }
   }
-  for (const m of state.meteors){
-    const p = m.t/m.life, a = Math.sin(p*Math.PI);
-    const x = m.x*VW, y = m.y*h;
-    ctx.strokeStyle = "rgba(255,246,220,"+(a*0.95).toFixed(3)+")";
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x - m.vx*VW*0.22, y - m.vy*h*0.5); ctx.stroke();
-  }
-  // one hard haze band right on the horizon
-  ctx.fillStyle = pal("haze");
-  ctx.globalAlpha = 0.85;
-  ctx.fillRect(0, Math.max(0, horizon-4), VW, 5);
-  ctx.globalAlpha = 1;
+  ctx.fillStyle = pal("haze"); ctx.globalAlpha = 0.85;
+  ctx.fillRect(0, Math.max(0, horizon-4), VW, 5); ctx.globalAlpha = 1;
 }
 
 function drawMountains(horizon, parallax){
@@ -1031,58 +1110,163 @@ function drawCar(c, x, y, sc, clipY){
   if (clipped) ctx.restore();
 }
 
+/* The Nova, seen from behind, at an angle.
+
+   Rotating a flat rear panel makes the car LEAN, which is what it was
+   doing. A car going sideways foreshortens: the rear face narrows as it
+   turns away and a flank appears alongside it. Two faces, not one sprite
+   on a pivot. The flank is drawn as a trapezoid, shorter and raised at
+   its far end, which is what sells the angle. */
 function drawPlayerCar(){
+  const ang  = clamp(state.slip * 1.75, -0.78, 0.78);
+  const co   = Math.abs(Math.cos(ang));
+  const si   = Math.abs(Math.sin(ang));
+  const nose = ang >= 0 ? 1 : -1;          // +1 = nose right, so we see the left flank
+
+  const W = 54, H = 30, LEN = 58;
+  const rearW = Math.max(6, W * co);
+  const sideW = LEN * si;
+  const total = rearW + sideW;
+
   const bob = Math.sin(state.musicT*Math.PI/TICK)*0.5;
-  const cx = Math.round(VW/2 + (state.shake ? rnd(-state.shake,state.shake) : 0));
-  const cy = Math.round(VH - 30 + bob + (state.shake ? rnd(-state.shake,state.shake)*0.5 : 0));
-  const steer = clamp((input.left?-1:0)+(input.right?1:0),-1,1);
-  const w = 60, h = 28;
+  const cx = Math.round(VW/2 + state.slip*26 + (state.shake ? rnd(-state.shake,state.shake) : 0));
+  const cy = Math.round(VH - 22 + bob + (state.shake ? rnd(-state.shake,state.shake)*0.5 : 0));
+
+  // flank on the far side from where the nose points
+  const flankLeft = nose > 0;
+  const x0 = cx - total/2;
+  const rx0 = flankLeft ? x0 + sideW : x0;
+  const rx1 = rx0 + rearW;
+  const fx0 = flankLeft ? x0 : rx1;
+  const fx1 = fx0 + sideW;
+
   ctx.strokeStyle="#000"; ctx.lineWidth=2;
-  ctx.fillStyle="rgba(0,0,0,.42)";
-  ctx.beginPath(); ctx.ellipse(cx, cy+11, w*0.56, 5, 0, 0, 7); ctx.fill();
-  // wheels first so the body overlaps them
-  box(cx-w/2-4, cy-7, 8, 14, "#14141a");
-  box(cx+w/2-4, cy-7, 8, 14, "#14141a");
-  // body
-  box(cx-w/2, cy-h+8, w, h-4, "#c4241a");
-  ctx.fillStyle="#ff4a34"; ctx.fillRect(cx-w/2+3, cy-h+10, w-6, h*0.34);
-  // roll bar and screen
-  box(cx-w*0.30+steer*2, cy-h-5, w*0.60, 13, "#1a1a22");
-  ctx.fillStyle="#4a7ad0"; ctx.fillRect(cx-w*0.26+steer*2, cy-h-3, w*0.52, 8);
-  // two heads
-  box(cx-w*0.20+steer*2, cy-h-8, 9, 8, "#8a5a30");
-  box(cx+w*0.06+steer*2, cy-h-8, 9, 8, "#ffd85a");
-  // lights and plate
-  box(cx-w/2+3,  cy-9, 11, 6, input.down ? "#ff3a20" : "#ff7a3c");
-  box(cx+w/2-14, cy-9, 11, 6, input.down ? "#ff3a20" : "#ff7a3c");
-  box(cx-10, cy-8, 20, 7, "#ffffff");
-  ctx.fillStyle="#20242c"; ctx.fillRect(cx-7, cy-6, 14, 4);
+  ctx.fillStyle="rgba(0,0,0,.45)";
+  ctx.beginPath(); ctx.ellipse(cx, cy+9, total*0.55, 5, 0, 0, 7); ctx.fill();
+
+  const top = cy - H + 9, roof = cy - H - 12;
+
+  /* ---- the flank, when there is one ---- */
+  if (sideW > 3){
+    const farX  = flankLeft ? fx0 : fx1;
+    const nearX = flankLeft ? fx1 : fx0;
+    const rise  = 11 * si;                      // the far end recedes and lifts
+    const drop  = 7 * si;                       // and the sill rises to meet it
+    const inset = flankLeft ? -1 : 1;
+    const quad = (tn, bn, tf, bf) => { ctx.beginPath();
+      ctx.moveTo(nearX, tn); ctx.lineTo(farX, tf);
+      ctx.lineTo(farX, bf);  ctx.lineTo(nearX, bn); ctx.closePath(); };
+
+    // lower body, sill rising as it goes away
+    quad(top, cy+5, top+rise, cy+5-drop);
+    ctx.fillStyle="#8f1710"; ctx.fill(); ctx.stroke();
+    // the roof and pillar band
+    quad(roof+2, top+1, roof+4+rise, top+1+rise);
+    ctx.fillStyle="#7a120c"; ctx.fill(); ctx.stroke();
+    // side glass: upper half only, so there is a body sill under it
+    ctx.fillStyle="#16273f";
+    ctx.beginPath();
+    ctx.moveTo(nearX+inset*2, roof+6);
+    ctx.lineTo(farX-inset*3,  roof+8+rise);
+    ctx.lineTo(farX-inset*3,  top-3+rise);
+    ctx.lineTo(nearX+inset*2, top-3);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // the door shut line, two thirds along
+    ctx.strokeStyle="#5e0f0a"; ctx.lineWidth=1;
+    const dxl = lerp(nearX, farX, 0.55);
+    ctx.beginPath(); ctx.moveTo(dxl, roof+5+rise*0.55); ctx.lineTo(dxl, cy+4-drop*0.55); ctx.stroke();
+    ctx.strokeStyle="#000"; ctx.lineWidth=2;
+    // GTE side stripe
+    ctx.fillStyle="#20242c";
+    ctx.beginPath();
+    ctx.moveTo(nearX, top+7); ctx.lineTo(farX, top+7+rise);
+    ctx.lineTo(farX, top+10+rise); ctx.lineTo(nearX, top+10);
+    ctx.closePath(); ctx.fill();
+    // rear wheel, at the near end where the arch is
+    const ww = Math.max(5, sideW*0.26);
+    const wx = flankLeft ? fx1-ww-1 : fx0+1;
+    box(wx, cy-3, ww, 12, "#141418");
+    ctx.fillStyle="#8a8a92"; ctx.fillRect(wx+1.5, cy, ww-3, 6);
+  }
+
+  /* ---- the rear face, foreshortened ---- */
+  const q = rearW / W;                          // how much of it we still see
+  box(rx0-3, cy-9, 7, 15, "#141418");           // near wheel
+  box(rx1-4, cy-9, 7, 15, "#141418");
+  box(rx0 + rearW*0.10, roof,   rearW*0.80, 6,  "#15151a");   // roof spoiler
+  box(rx0 + rearW*0.14, roof+5, rearW*0.72, 17, "#1a2f52");   // tailgate glass
+  ctx.fillStyle="#2f4f80"; ctx.fillRect(rx0+rearW*0.19, roof+7, rearW*0.62, 9);
+  ctx.fillStyle="#a81c14";
+  ctx.fillRect(rx0+rearW*0.10, roof+5, Math.max(2,4*q), 17);
+  ctx.fillRect(rx1-rearW*0.10-Math.max(2,4*q), roof+5, Math.max(2,4*q), 17);
+  box(rx0, top, rearW, H-4, "#a81c14");
+  ctx.fillStyle="#c4241a"; ctx.fillRect(rx0+3*q, top+2, rearW-6*q, H-9);
+  ctx.fillStyle="#20242c"; ctx.fillRect(rx0+3*q, top, rearW-6*q, 3);
+  if (rearW > 14){
+    box(rx0+3*q,             top+6, 10*q, 13, "#e0402a");
+    box(rx1-3*q-10*q,        top+6, 10*q, 13, "#e0402a");
+    ctx.fillStyle="#ffb03a";
+    ctx.fillRect(rx0+4*q, top+7, 8*q, 4);
+    ctx.fillRect(rx1-4*q-8*q, top+7, 8*q, 4);
+    if (input.down){ ctx.fillStyle="#ff5a3c";
+      ctx.fillRect(rx0+4*q, top+12, 8*q, 6); ctx.fillRect(rx1-4*q-8*q, top+12, 8*q, 6); }
+  }
+  if (rearW > 22){
+    box(cx0plate(rx0,rearW), cy-4, 26*q, 8, "#f0d84a");
+    ctx.fillStyle="#20242c"; ctx.font="bold "+Math.max(4,Math.round(6*q))+"px ui-monospace, monospace";
+    ctx.textAlign="center"; ctx.textBaseline="top";
+    ctx.fillText("F400 PTF", rx0+rearW/2, cy-3);
+  }
+
+  /* ---- who is in it. UK car, so the driver sits on the right as you
+          look at the back of it, and Kalinka rides on the left. ---- */
+  if (rearW > 12){
+    const gy = roof + 7, lean = -clamp(state.slip,-0.5,0.5)*4;
+    const dx = rx0 + rearW*0.66, kx = rx0 + rearW*0.22;
+    ctx.fillStyle="#c8a074";                                 // driver
+    ctx.fillRect(dx-3*q+lean, gy, Math.max(2,7*q), 8);
+    ctx.fillStyle="#3a2a1e";
+    ctx.fillRect(dx-3*q+lean, gy, Math.max(2,7*q), 3);
+    ctx.fillStyle="#e09a4a";                                 // Kalinka
+    ctx.fillRect(kx-3*q+lean, gy+1, Math.max(2,7*q), 7);
+    ctx.fillStyle="#c47a34";
+    ctx.fillRect(kx-3*q+lean, gy-1, Math.max(1,2*q), 3);
+    ctx.fillRect(kx+2*q+lean,  gy-1, Math.max(1,2*q), 3);
+  }
+
+  // tyre smoke once it is properly sideways
+  if (state.sliding && Math.abs(state.slip) > SLIP_LINK){
+    const a = clamp(Math.abs(state.slip)*1.5, 0, 0.55);
+    ctx.fillStyle = "rgba(232,228,220,"+a.toFixed(2)+")";
+    for (let i=0;i<6;i++){
+      const sx = cx - nose*(24+i*20) + rnd(-5,5);
+      const sy = cy + 5 - i*3 + rnd(-2,2);
+      ctx.fillRect(sx, sy, 8+i*3, 4+i);
+    }
+  }
 }
+function cx0plate(rx0,rearW){ return rx0 + rearW/2 - 13*(rearW/54); }
 
-function drawHeadlights(horizon, vanishX){
-  const cx = VW/2, hy = clamp(horizon, 8, VH-50);
-  const vx = clamp(vanishX, 40, VW-40);
+/* The beam starts at the bumper and swings with the wheel. Before, it was
+   anchored to the vanishing point of the furthest visible road segment,
+   which is why it wandered off independently of where the car pointed. */
+function drawHeadlights(horizon){
+  const cx = VW/2, hy = clamp(horizon, 8, VH-70);
+  const steer = clamp((input.left?-1:0)+(input.right?1:0), -1, 1);
+  const swing = steer * 26 + state.playerX * -10;
+  const bumper = VH - 30;
+  const cone = () => { ctx.moveTo(cx-13, bumper); ctx.lineTo(cx+13, bumper);
+    ctx.lineTo(cx+58+swing, hy+1); ctx.lineTo(cx-58+swing, hy+1); ctx.closePath(); };
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(0,0,VW,VH);
-  ctx.moveTo(cx-152, VH); ctx.lineTo(cx+152, VH);
-  ctx.lineTo(vx+15, hy+1); ctx.lineTo(vx-15, hy+1);
-  ctx.closePath();
-  ctx.fillStyle = "rgba(2,3,8,0.88)";
-  ctx.fill("evenodd");
+  ctx.beginPath(); ctx.rect(0,0,VW,VH); cone();
+  ctx.fillStyle = "rgba(2,3,8,0.90)"; ctx.fill("evenodd");
   ctx.restore();
-
-  // warm additive spill so the lit road doesn't just look un-darkened
   ctx.globalCompositeOperation = "lighter";
-  const g = ctx.createLinearGradient(0, VH, 0, hy);
-  g.addColorStop(0,   "rgba(255,238,200,0.16)");
-  g.addColorStop(0.45,"rgba(255,226,170,0.07)");
+  const g = ctx.createLinearGradient(0, bumper, 0, hy);
+  g.addColorStop(0,   "rgba(255,238,200,0.22)");
+  g.addColorStop(0.5, "rgba(255,226,170,0.10)");
   g.addColorStop(1,   "rgba(255,220,160,0)");
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(cx-152, VH); ctx.lineTo(cx+152, VH);
-  ctx.lineTo(vx+15, hy+1); ctx.lineTo(vx-15, hy+1);
-  ctx.closePath(); ctx.clip();
+  ctx.save(); ctx.beginPath(); cone(); ctx.clip();
   ctx.fillStyle = g; ctx.fillRect(0, hy, VW, VH-hy);
   ctx.restore();
   ctx.globalCompositeOperation = "source-over";
@@ -1171,10 +1355,7 @@ function render(){
     }
   }
 
-  if (state.section.night){
-    const far = drawn.length ? drawn[drawn.length-1].p1.screen.x : VW/2;
-    drawHeadlights(horizon, far);
-  }
+  if (state.night) drawHeadlights(horizon);
   drawPlayerCar();
 
   /* beat flashes */
@@ -1195,7 +1376,57 @@ function render(){
     ctx.globalCompositeOperation="source-over";
   }
 
+  weatherPass(horizon);
   drawHUD();
+}
+
+/* Rain, mist and the light level, laid over the finished frame. */
+function weatherPass(horizon){
+  if (state.mist > 0.02){
+    const g = ctx.createLinearGradient(0, Math.max(0,horizon-16), 0, VH);
+    g.addColorStop(0, "rgba(214,226,236,"+(0.55*state.mist).toFixed(3)+")");
+    g.addColorStop(1, "rgba(214,226,236,0)");
+    ctx.fillStyle = g; ctx.fillRect(0, Math.max(0,horizon-16), VW, VH);
+  }
+  if (state.rain > 0.02){
+    if (!state.rainDrops.length)
+      for (let i=0;i<70;i++) state.rainDrops.push({x:Math.random()*VW, y:Math.random()*VH,
+        v:rnd(320,620), l:rnd(5,13), s:rnd(-0.5,0.5)});
+    ctx.strokeStyle = "rgba(196,220,240,"+(0.5*state.rain).toFixed(2)+")";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const d of state.rainDrops){
+      d.y += d.v*0.016; d.x += d.s;
+      if (d.y > VH){ d.y = -8; d.x = Math.random()*VW; }
+      ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.s*2, d.y + d.l);
+    }
+    ctx.stroke();
+    // standing water on the tarmac
+    ctx.globalCompositeOperation="lighter";
+    ctx.fillStyle="rgba(150,180,220,0.05)";
+    ctx.fillRect(0, Math.max(0,horizon), VW, VH-horizon);
+    ctx.globalCompositeOperation="source-over";
+  }
+  if (state.eclipse >= 0.999){
+    const h = VH*0.34, cx = Math.round(VW/2 + state.playerX*-14), cy = Math.round(h-46);
+    ctx.globalCompositeOperation="lighter";
+    const cg = ctx.createRadialGradient(cx,cy,22, cx,cy,78);
+    cg.addColorStop(0,"rgba(255,238,200,0.55)"); cg.addColorStop(1,"rgba(255,150,60,0)");
+    ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(cx,cy,78,0,7); ctx.fill();
+    ctx.globalCompositeOperation="source-over";
+    ctx.fillStyle="#080310"; ctx.beginPath(); ctx.arc(cx,cy,24,0,7); ctx.fill();
+    ctx.strokeStyle="#fff6e0"; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(cx,cy,25,0,7); ctx.stroke();
+  }
+  if (state.light < 1){
+    ctx.fillStyle = "rgba(4,6,16,"+((1-state.light)*0.76).toFixed(3)+")";
+    ctx.fillRect(0,0,VW,VH);
+  } else if (state.light > 1){
+    ctx.globalCompositeOperation="lighter";
+    ctx.fillStyle = "rgba(255,244,214,"+((state.light-1)*1.6).toFixed(3)+")";
+    ctx.fillRect(0,0,VW,VH);
+    ctx.globalCompositeOperation="source-over";
+  }
 }
 
 /* ---- HUD ------------------------------------------------------- */
@@ -1207,31 +1438,39 @@ function txt(s, x, y, col, size, align, shadow){
 }
 function drawHUD(){
   txt("TIME",  6, 5, "#ff8a3c", 8);
-  txt(Math.ceil(state.timeLeft).toString().padStart(2,"0"), 6, 14, "#ffe066", 12);
-  txt("SCORE", VW/2-26, 5, "#ff6ad0", 8);
-  txt(Math.floor(state.score).toLocaleString("en-GB"), VW/2-26, 14, "#f4f0e4", 12);
-  txt("BAR", VW-58, 5, "#7ad0ff", 8);
-  txt(state.bar+"/"+TOTAL_BARS, VW-58, 14, "#f4f0e4", 10);
+  txt(Math.ceil(state.timeLeft).toString().padStart(2,"0"), 6, 14,
+      state.timeLeft<10?"#ff5a3c":"#ffe066", 13);
 
-  const kph = Math.round(state.speed/BASE_SPEED * 290);
+  txt("SCORE", VW/2-30, 5, "#ff6ad0", 8);
+  txt(Math.floor(state.score).toLocaleString("en-GB"), VW/2-30, 14, "#f4f0e4", 13);
+
+  // the chain, as rungs rather than a number
+  const rungs = Math.min(state.chain, CHAIN_CAP+1);
+  for (let i=0;i<CHAIN_CAP+1;i++){
+    const on = i < rungs;
+    ctx.fillStyle = on ? (i>=CHAIN_CAP ? "#ffe066" : "#7cff9a") : "rgba(255,255,255,.13)";
+    ctx.fillRect(VW-10-i*0, 22+ (CHAIN_CAP-i)*6, 6, 4);
+  }
+  if (state.chain > CHAIN_CAP+1){
+    txt("x"+state.chain, VW-34, 22+(CHAIN_CAP+1)*6, "#ffe066", 9);
+  }
+
+  const kph = Math.round(state.speed/BASE_SPEED * 300);
   txt(kph+" km/h", 6, VH-20, "#ffe066", 9);
   const bars = 12, lit = Math.round(clamp((state.throttle-THROTTLE_MIN)/(THROTTLE_MAX-THROTTLE_MIN),0,1)*bars);
   for (let i=0;i<bars;i++){
     ctx.fillStyle = i<lit ? (i>bars-4?"#ff5a3c":"#7ad0ff") : "rgba(255,255,255,.14)";
     ctx.fillRect(6+i*7, VH-8, 5, 4);
   }
-  txt("STAGE "+(SECTIONS.indexOf(state.section)+1), VW-58, VH-20, "#f4f0e4", 9);
 
-  if (state.cueT > 0 && state.banner <= 0){
-    ctx.globalAlpha = Math.min(1, state.cueT/0.4);
-    txt(state.cue, VW/2, 50, "#ffe066", 12, "center");
+  if (state.sliding && Math.abs(state.slip) > SLIP_LINK){
+    ctx.globalAlpha = clamp(Math.abs(state.slip)*3.5, 0, 0.9);
+    txt("DRIFT", VW/2, VH-34, "#ffe066", 10, "center");
     ctx.globalAlpha = 1;
   }
-  if (state.banner > 0 && state.bannerSec){
-    const a = Math.min(1, state.banner/0.4);
-    ctx.globalAlpha = a;
-    txt(state.bannerSec.place, VW/2, 42, "#fff8e8", 14, "center");
-    txt("BAR "+state.bannerSec.bar+"  ·  "+state.bannerSec.name, VW/2, 60, "#ffc46a", 8, "center");
+  if (state.pop){
+    ctx.globalAlpha = clamp(state.pop.t/0.4,0,1);
+    txt("+"+state.pop.v, VW/2, VH-52, "#7cff9a", 11, "center");
     ctx.globalAlpha = 1;
   }
 }
@@ -1244,20 +1483,21 @@ function drawOverlayScreen(){
     ctx.fillRect(Math.round(s.x*VW), Math.round(s.y*VH*1.6), 1, 1);
   }
   if (state.mode==="title"){
-    txt("LIEBEZEIT", VW/2, 58, "#ff6ad0", 24, "center");
-    txt("LAGUNA SECA  ·  CABINET THREE", VW/2, 88, "#ffc46a", 8, "center");
-    txt("85 BPM  ·  96 BARS  ·  4:31", VW/2, 104, "#7ad0ff", 8, "center");
+    txt("LIEBEZEIT", VW/2, 62, "#ff6ad0", 19, "center");
+    txt("BUILD B · THE ROAD", VW/2, 88, "#ffc46a", 9, "center");
+    txt("THREAD IT. SLIDE IT.", VW/2, 112, "#7ad0ff", 9, "center");
+    txt("KEEP THE CHAIN ALIVE", VW/2, 124, "#7ad0ff", 9, "center");
     const blink = (t%1) < 0.6;
-    if (blink) txt("PRESS SPACE OR TAP TO DRIVE", VW/2, 140, "#f4f0e4", 9, "center");
-    txt("ENGINE PROTOTYPE · PLACEHOLDER CLICK TRACK", VW/2, VH-22, "#6a6458", 7, "center");
+    if (blink) txt("SPACE OR TAP", VW/2, 172, "#f4f0e4", 10, "center");
+    txt("CONTACT BREAKS THE CHAIN", VW/2, VH-28, "#6a6458", 8, "center");
   } else if (state.mode==="over"){
-    txt("OUT OF TIME", VW/2, 66, "#ff5a3c", 20, "center");
-    txt("BAR "+state.bar+" OF "+TOTAL_BARS, VW/2, 94, "#ffc46a", 9, "center");
+    txt("OUT OF TIME", VW/2, 70, "#ff5a3c", 18, "center");
+    txt("BEST CHAIN x"+state.bestChain, VW/2, 94, "#ffc46a", 9, "center");
     txt("SCORE "+Math.floor(state.score).toLocaleString("en-GB"), VW/2, 110, "#f4f0e4", 11, "center");
     if ((t%1)<0.6) txt("SPACE / TAP TO RETRY", VW/2, 146, "#7ad0ff", 9, "center");
   } else {
     txt("GOAL", VW/2, 60, "#ffe066", 26, "center");
-    txt("YOU DROVE THE WHOLE TRACK", VW/2, 94, "#ff6ad0", 9, "center");
+    txt("BEST CHAIN x"+state.bestChain, VW/2, 94, "#ff6ad0", 9, "center");
     txt("SCORE "+Math.floor(state.score).toLocaleString("en-GB"), VW/2, 112, "#f4f0e4", 12, "center");
     if ((t%1)<0.6) txt("SPACE / TAP TO GO AGAIN", VW/2, 148, "#7ad0ff", 9, "center");
   }
@@ -1274,7 +1514,7 @@ let scanCv = null, grainSheets = [], grainIx = 0, vigCv = null;
 function buildScanlines(){
   scanCv = document.createElement("canvas"); scanCv.width=VW; scanCv.height=VH;
   const c = scanCv.getContext("2d");
-  c.fillStyle = "rgba(0,0,0,0.30)";
+  c.fillStyle = "rgba(0,0,0,0.13)";
   for (let y=1; y<VH; y+=2) c.fillRect(0, y, VW, 1);
 }
 function buildGrain(){
@@ -1291,7 +1531,7 @@ function buildVignette(){
   vigCv = document.createElement("canvas"); vigCv.width=VW; vigCv.height=VH;
   const c = vigCv.getContext("2d");
   const g = c.createRadialGradient(VW/2,VH/2,VH*0.40, VW/2,VH/2,VH*0.92);
-  g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,0.42)");
+  g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,0.20)");
   c.fillStyle = g; c.fillRect(0,0,VW,VH);
 }
 
@@ -1311,14 +1551,14 @@ function present(){
 
   // chromatic split, one internal pixel each way
   cctx.globalCompositeOperation = "lighter";
-  cctx.globalAlpha = 0.09;
+  cctx.globalAlpha = 0.045;
   cctx.drawImage(buf, -1, 0);
   cctx.drawImage(buf,  1, 0);
 
   // bloom off a quarter-res copy
   bctx.clearRect(0,0,bloom.width,bloom.height);
   bctx.drawImage(buf, 0,0,bloom.width,bloom.height);
-  cctx.globalAlpha = 0.16;
+  cctx.globalAlpha = 0.09;
   cctx.imageSmoothingEnabled = true;
   cctx.drawImage(bloom, 0,0,VW,VH);
   cctx.imageSmoothingEnabled = false;
@@ -1330,7 +1570,7 @@ function present(){
   const bandY = Math.round((((t*0.16) % 1.5) - 0.25) * VH);
   if (bandY > -14 && bandY < VH){
     const bh = 9;
-    cctx.globalAlpha = 0.55;
+    cctx.globalAlpha = 0.28;
     cctx.drawImage(buf, 0, bandY, VW, bh, Math.round(Math.sin(t*9)*3), bandY, VW, bh);
     cctx.globalAlpha = 0.10; cctx.fillStyle = "#d0e4ff";
     cctx.fillRect(0, bandY, VW, bh);
@@ -1338,7 +1578,7 @@ function present(){
   }
 
   cctx.drawImage(scanCv, 0, 0);
-  cctx.globalAlpha = 0.045;
+  cctx.globalAlpha = 0.022;
   cctx.drawImage(grainSheets[(grainIx++) >> 1 & 3], 0, 0);
   cctx.globalAlpha = 1;
   cctx.drawImage(vigCv, 0, 0);
@@ -1401,7 +1641,8 @@ addEventListener("mouseup",        e=>pointer(e,false));
     el.addEventListener("mouseup",    off);
     el.addEventListener("mouseleave", off);
   };
-  bind(".pad-left","left"); bind(".pad-right","right"); bind(".pad-gas","up");
+  bind(".pad-left","left"); bind(".pad-right","right");
+  bind(".pad-gas","up"); bind(".pad-brake","down");
 })();
 
 /* ============================================================
