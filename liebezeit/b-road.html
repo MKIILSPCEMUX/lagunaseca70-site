@@ -17,7 +17,7 @@
 </head>
 <body>
 <div id="wrap"><canvas id="screen"></canvas></div>
-<div id="hint">arrows steer &nbsp;·&nbsp; up-down throttle &nbsp;·&nbsp; commit to a corner and it lets go &nbsp;·&nbsp; C crt</div>
+<div id="hint">arrows steer &nbsp;·&nbsp; up-down throttle &nbsp;·&nbsp; C crt &nbsp;·&nbsp; M click</div>
 <script>
 "use strict";
 
@@ -77,26 +77,12 @@ const TIME_CAP     = 50;
    let go AND to set lateral velocity, with the corner folded into it. The
    road was injecting sideways motion, steering was fighting it, and the
    old centrifugal term was stacked on top. That is why steering vanished. */
-const MAX_TH       = 0.34;    // heading the car settles at under full lock
-const YAW_K        = 6.0;     // how fast it gets there, and returns
-const ALIGN        = 2.60;    // once loose, it rotates towards where it is going
-/* Stiff, deliberately. With a stiff spring the force the tyres are asked
-   for converges to v x (turn rate), which IS the real cornering load, so
-   the cap below can be reasoned about as v-squared-over-r rather than
-   guessed. */
-const TYRE_K       = 40.0;
-const TYRE_CAP     = 17000;   // and the most they can pull before saturating
-const CURVE_K      = 2.10e-5; // road tangent rotation per unit curve per unit distance
-/* Full lock on a straight at full speed comes to about 0.72, which is
-   under the limit, so the car GRIPS and steers precisely. It is the
-   corner that pushes you over: a hard bend adds its own load, and taken
-   flat out the total passes 1.0 and the rear lets go. Braking on the way
-   in drops the load and you can take the same corner stuck down. That
-   choice is the mechanic. */
-
-    // the tail keeps coming round
-const CENTRIFUGAL  = 0.0000300;
-const SLIP_LINK    = 0.13;    // slip angle that counts as a real drift
+/* Steering is direct. The car goes where you point it and the corner
+   pushes you wide. That is the whole handling model, and it is the one
+   that worked. Every attempt to layer a slide on top of a rear-view
+   position model made it worse, so it is gone. */
+const STEER_RATE   = 2.6;
+const CENTRIFUGAL  = 0.0000265;
 
 /* ---- the chain ladder -------------------------------------------
    Seven notes rising to the octave, then the octave held. Root is a
@@ -383,7 +369,7 @@ const state = {
   section:SECTIONS[0], prevSection:SECTIONS[0], blend:1,
   bar:1, musicT:0,
   position:0, playerX:0, speed:0, throttle:1,
-  th:0, w:0, slip:0, sliding:false, driftT:0,
+  lean:0,
   segments:[], genCurve:0, genY:0, genBar:0,
   barStart:[], roadBarCursor:1,
   scenery:[], traffic:[], meteors:[], fxQueue:[],
@@ -562,56 +548,33 @@ function update(dt){
   state.mist  = state.section.weather==="mist" ? clamp(1-(bf-1)/9,0.25,1) : 0;
 
 
-  /* --- the car, in the road's frame ------------------------- */
+  /* --- speed, then steering -------------------------------- */
   const pSeg = segAt(state.position + PLAYER_Z);
-  const cs = Math.cos(state.th), sn = Math.sin(state.th);
-  let vf =  state.speed*cs + state.w*sn;      // along the car
-  let vs = -state.speed*sn + state.w*cs;      // across the car
 
-  // engine and brakes act along the car
   const tgt = BASE_SPEED * state.throttle;
-  vf += (tgt - vf) * clamp((vf < tgt ? 2.2 : 7.5)*dt, 0, 1);
-  if (state.crashT > 0){ state.crashT -= dt; vf *= (1 - 2.4*dt); }
-  vf = Math.max(BASE_SPEED*0.12, vf);
-
-  /* Friction circle. The tyres try to cancel sideways speed, but there is
-     a limit to how hard they can pull. Ask for more than the limit and
-     they are saturated: that is the slide, and it needs no threshold
-     invented for it. */
-  const want = -vs * TYRE_K;
-  const cap  = TYRE_CAP * (Math.abs(state.playerX) > 1.05 ? 0.55 : 1);
-  // hysteresis, or it chatters in and out on the threshold
-  if (Math.abs(want) > cap) state.sliding = true;
-  else if (Math.abs(want) < cap*0.72) state.sliding = false;
-  vs += clamp(want, -cap, cap) * dt;
-
-  // back into the road's frame
-  state.speed = vf*cs - vs*sn;
-  state.w     = vf*sn + vs*cs;
-
-  state.slip = Math.atan2(vs, Math.max(BASE_SPEED*0.15, Math.abs(vf)));
-
-  /* Heading is DRIVEN towards a steering angle, not integrated forever.
-     Integrating means holding a key spirals you off the road in two
-     seconds, which is what it was doing. */
-  const steer = (input.left?-1:0)+(input.right?1:0);
-  const auth  = clamp(Math.abs(vf)/(BASE_SPEED*0.42), 0, 1);
-  state.th += (steer*MAX_TH*auth - state.th) * Math.min(1, YAW_K*dt);
-  if (state.sliding) state.th += state.slip * ALIGN * dt;
-  state.th -= pSeg.curve * CURVE_K * state.speed * dt;
-  state.th  = clamp(state.th, -0.75, 0.75);
+  state.speed += (tgt - state.speed) * clamp((state.speed < tgt ? 2.2 : 7.5)*dt, 0, 1);
+  if (state.crashT > 0){ state.crashT -= dt; state.speed *= (1 - 2.4*dt); }
+  state.speed = Math.max(BASE_SPEED*0.12, state.speed);
 
   const dz = state.speed * dt;
   state.position += dz;
   ensureRoad();
 
-  state.playerX += state.w * dt / ROAD_W;
-  state.playerX = clamp(state.playerX, -3.2, 3.2);
-  if (Math.abs(state.playerX) >= 3.19) state.w *= 0.25;
-  if (Math.abs(state.playerX) > 1.05) state.speed *= (1 - 1.1*dt);
-
   const speedPct = state.speed / BASE_SPEED;
-  if (state.sliding) state.speed *= (1 - Math.abs(state.slip)*0.42*dt);
+  const steer = (input.left?-1:0)+(input.right?1:0);
+  state.playerX += steer * STEER_RATE * dt * clamp(speedPct, 0.6, 1.0);
+  state.playerX -= pSeg.curve * dz * CENTRIFUGAL;
+  state.playerX = clamp(state.playerX, -3.2, 3.2);
+
+  if (Math.abs(state.playerX) > 1.05){
+    state.speed *= (1 - 1.6*dt);
+    state.shake  = Math.max(state.shake, 1.2);
+  }
+
+  /* Cosmetic only. The body leans into the load so the 3D model has
+     something to do. It does not affect where the car goes. */
+  const leanTo = clamp(steer*0.13 + pSeg.curve*0.011, -0.21, 0.21);
+  state.lean += (leanTo - state.lean) * Math.min(1, 6*dt);
 
   /* --- throttle -------------------------------------------- */
   const tTarget = input.up ? THROTTLE_MAX : (input.down ? THROTTLE_MIN : 0.90);
@@ -650,16 +613,6 @@ function update(dt){
       const fast  = clamp(state.speed / BASE_SPEED, 0, 1.3);
       addLink(Math.round((70 + 200*tight) * fast));
     }
-  }
-
-  /* --- the chain: threading OR holding a slide -------------- */
-  if (state.sliding && Math.abs(state.slip) > SLIP_LINK && speedPct > 0.5){
-    state.driftT += dt;
-    state.chainT = 3.2;
-    // one link per beat held, so a long drift climbs the ladder in time
-    if (state.driftT >= BEAT){ state.driftT -= BEAT; addLink(Math.round(90 * speedPct)); }
-  } else {
-    state.driftT = 0;
   }
 
   /* --- meteors, flashes, clock ------------------------------ */
@@ -718,7 +671,7 @@ function startRun(){
   state.section = SECTIONS[0]; state.prevSection = SECTIONS[0]; state.blend = 1;
   state.bar=1; state.musicT=0; state.position=0; state.playerX=0;
   state.speed=BASE_SPEED*0.4; state.throttle=0.94;
-  state.th=0; state.w=0; state.slip=0; state.sliding=false; state.driftT=0;
+  state.lean=0;
   state.segments.length=0; state.genCurve=0; state.genY=0; state.genBar=0;
   state.barStart.length=0; state.roadBarCursor=1;
   state.scenery.length=0; state.traffic.length=0; state.meteors.length=0;
@@ -1009,21 +962,11 @@ function drawCar(c, x, y, sc, clipY){
 
 function drawPlayerCar(){
   const bob = Math.sin(state.musicT*Math.PI/TICK)*0.5;
-  const cx = Math.round(VW/2 + state.slip*20 + (state.shake ? rnd(-state.shake,state.shake) : 0));
+  const cx = Math.round(VW/2 + state.lean*22 + (state.shake ? rnd(-state.shake,state.shake) : 0));
   const cy = Math.round(VH - 26 + bob + (state.shake ? rnd(-state.shake,state.shake)*0.5 : 0));
-  // tyre smoke behind, before the car so it sits under it
-  if (state.sliding && Math.abs(state.slip) > SLIP_LINK*0.6){
-    const a = clamp(Math.abs(state.slip)*2.2, 0, 0.5);
-    ctx.fillStyle = "rgba(232,228,220,"+a.toFixed(2)+")";
-    for (let i=0;i<6;i++){
-      const sx = cx - Math.sign(state.slip||1)*(18+i*18) + rnd(-5,5);
-      const sy = cy + 6 - i*2 + rnd(-2,2);
-      ctx.fillRect(sx, sy, 8+i*3, 4+i);
-    }
-  }
   ctx.fillStyle="rgba(0,0,0,.42)";
   ctx.beginPath(); ctx.ellipse(cx, cy+8, 34, 6, 0, 0, 7); ctx.fill();
-  drawCar3D(cx, cy, 26, state.th, NOVA_PAL, input.down);
+  drawCar3D(cx, cy, 26, state.lean, NOVA_PAL, input.down);
 }
 
 /* The beam starts at the bumper and swings with the wheel. Before, it was
@@ -1242,11 +1185,6 @@ function drawHUD(){
     ctx.fillRect(6+i*7, VH-8, 5, 4);
   }
 
-  if (state.sliding && Math.abs(state.slip) > SLIP_LINK){
-    ctx.globalAlpha = clamp(Math.abs(state.slip)*3.5, 0, 0.9);
-    txt("DRIFT", VW/2, VH-34, "#ffe066", 10, "center");
-    ctx.globalAlpha = 1;
-  }
   if (state.pop){
     ctx.globalAlpha = clamp(state.pop.t/0.4,0,1);
     txt("+"+state.pop.v, VW/2, VH-52, "#7cff9a", 11, "center");
@@ -1264,7 +1202,7 @@ function drawOverlayScreen(){
   if (state.mode==="title"){
     txt("LIEBEZEIT", VW/2, 62, "#ff6ad0", 19, "center");
     txt("BUILD B · THE ROAD", VW/2, 88, "#ffc46a", 9, "center");
-    txt("THREAD IT. SLIDE IT.", VW/2, 112, "#7ad0ff", 9, "center");
+    txt("THREAD THE TRAFFIC", VW/2, 112, "#7ad0ff", 9, "center");
     txt("KEEP THE CHAIN ALIVE", VW/2, 124, "#7ad0ff", 9, "center");
     const blink = (t%1) < 0.6;
     if (blink) txt("SPACE OR TAP", VW/2, 172, "#f4f0e4", 10, "center");
