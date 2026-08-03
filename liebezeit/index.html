@@ -160,7 +160,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v0.9.6</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v0.9.7</div>
       </div>
 
       <div class="bezel">
@@ -194,8 +194,8 @@
 
       <div class="hull-foot">
         <span class="foot-play">Arrows to steer &middot; up / down for the pedal</span>
-        <span class="foot-play">Thread the traffic &middot; keep the chain alive</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v0.9.6</span>
+        <span class="foot-play">Thread the traffic &middot; miss everything</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v0.9.7</span>
       </div>
     </div>
   </div>
@@ -229,7 +229,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v0.9.6 · 2 Aug";
+const VERSION      = "v0.9.7 · 2 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -290,14 +290,14 @@ const VW = 224, VH = 320;   // portrait, matching Dark Star and Sneca
    explains itself instead of being an arbitrary night. */
 const SECTIONS = [
  { bar:1,  weather:"mist",    curve:0.35, hill:0.30, density:0.5,
-   sky:["#2b3f70","#c98a6a"], mtn:"#3a3358", haze:"#d9a888",
-   ground:["#2f7a4e","#276b45"], rumble:["#ffffff","#e0342c"],
-   road:["#6a6a74","#63636d"], lane:"#ffffff", obj:["#1e6a3c","#155230","#7a4a2a"] },
+   sky:["#22345e","#8fa8c8"], mtn:"#33405e", haze:"#c8d4e0",
+   ground:["#2d6f56","#26604a"], rumble:["#f0f4f8","#c4423a"],
+   road:["#63686f","#5d6269"], lane:"#eef2f6", obj:["#1c5a44","#144836","#5a5a52"] },
 
  { bar:5,  weather:"mist",    curve:0.42, hill:0.45, density:0.5,
-   sky:["#2d55a8","#ffab72"], mtn:"#443a72", haze:"#f0b487",
-   ground:["#33915a","#2b804e"], rumble:["#ffffff","#e0342c"],
-   road:["#6e6e78","#676771"], lane:"#ffffff", obj:["#22803e","#166432","#8a5430"] },
+   sky:["#2a4a96","#dcb894"], mtn:"#3e3e6a", haze:"#e4c8ac",
+   ground:["#31895a","#297a4e"], rumble:["#ffffff","#dc3c34"],
+   road:["#6a6d76","#63666f"], lane:"#fafcff", obj:["#1f7a44","#155e34","#7a5c38"] },
 
  { bar:9,  weather:"clear",   curve:0.62, hill:0.45, density:1,
    sky:["#1a8fe0","#9fe2ff"], mtn:"#2f6fb0", haze:"#c4ecff",
@@ -335,14 +335,14 @@ const SECTIONS = [
    road:["#5e5e6a","#575764"], lane:"#e8e4d8", obj:["#2a5a38","#1e4630","#7a6a44"] },
 
  { bar:61, weather:"totality",curve:0.42, hill:0.30, density:0.5,
-   sky:["#05060f","#0d1226"], mtn:"#0b0d1c", haze:"#141c34",
-   ground:["#0e1418","#0b1014"], rumble:["#5a5a50","#3a1e1c"],
-   road:["#1e1e26","#1a1a22"], lane:"#6a6458", obj:["#0a100c","#0d1410","#101a14"] },
+   sky:["#05060f","#0d1226"], mtn:"#0b0d1c", haze:"#2a2438",
+   ground:["#243040","#1e2836"], rumble:["#cfc4b4","#8a3a30"],
+   road:["#5e5a66","#565360"], lane:"#e8e0d0", obj:["#1a2430","#202c3a","#26343e"] },
 
  { bar:65, weather:"totality",curve:0.32, hill:0.22, density:0.25,
-   sky:["#04050d","#0b1020"], mtn:"#090b18", haze:"#101828",
-   ground:["#0c1216","#0a0e12"], rumble:["#5a5a50","#3a1e1c"],
-   road:["#1d1d24","#191920"], lane:"#665f52", obj:["#090c0a","#0c100d","#0f1411"] },
+   sky:["#04050d","#0b1020"], mtn:"#090b18", haze:"#282234",
+   ground:["#222e3c","#1c2632"], rumble:["#cbc0b0","#86382e"],
+   road:["#5c5864","#54515e"], lane:"#e4dccc", obj:["#182230","#1e2a38","#24323c"] },
 
  { bar:69, weather:"flood",   curve:1.00, hill:0.85, density:1,
    sky:["#1a8fe0","#ffe8b0"], mtn:"#3a6aa0", haze:"#ffeec0",
@@ -374,7 +374,10 @@ function keyed(keys, x){
   const t=(b[0]===a[0])?0:clamp((x-a[0])/(b[0]-a[0]),0,1);
   return lerp(a[1], b[1], t*t*(3-2*t));
 }
-const W_MIST    = [[1,1.0],[7,0.85],[13,0.0],[96,0.0]];
+/* No fog. A translucent white sheet over the road reads as a rendering
+   fault, not as weather. The morning is cool light instead: a blue cast
+   that burns off over the first eight bars. */
+const W_CHILL   = [[1,1.0],[5,0.72],[9,0.22],[13,0.0],[96,0.0]];
 const W_DUST    = [[1,0.0],[15,0.0],[18,1.0],[24,1.0],[28,0.0],[96,0.0]];
 const W_CLOUD   = [[1,0.0],[23,0.0],[27,1.0],[33,1.0],[40,0.35],[47,0.0],[96,0.0]];
 const W_RAIN    = [[1,0.0],[27,0.0],[29,1.0],[33,1.0],[38,0.0],[96,0.0]];
@@ -382,8 +385,8 @@ const W_RAINBOW = [[1,0.0],[36,0.0],[39,1.0],[45,1.0],[49,0.0],[96,0.0]];
 
 /* Daylight as a smooth curve rather than a step per section, so the
    eclipse creeps in over twelve bars instead of switching on. */
-const LIGHT_KEYS = [[1,0.50],[6,0.80],[9,1.00],[26,1.00],[29,0.62],[33,0.80],
-                    [45,0.95],[49,0.92],[55,0.72],[58,0.44],[61,0.24],[68,0.24],
+const LIGHT_KEYS = [[1,0.72],[6,0.90],[9,1.00],[26,1.00],[29,0.62],[33,0.80],
+                    [45,0.95],[49,0.92],[55,0.72],[58,0.44],[61,0.34],[68,0.34],
                     [70,1.05],[77,0.92],[88,0.70],[93,0.46],[97,0.30]];
 function lightAt(barF){
   let a=LIGHT_KEYS[0], b=LIGHT_KEYS[LIGHT_KEYS.length-1];
@@ -584,7 +587,7 @@ const state = {
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
   banner:0, bannerSec:null, cue:"", cueT:0,
-  light:0.5, eclipse:0, night:false, rain:0, mist:1, cloud:0, dust:0, rainbow:0, rainDrops:[],
+  light:0.5, eclipse:0, night:false, rain:0, chill:1, cloud:0, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
   hitFlash:0, snareFlash:0, kickFlash:0, chain:0, chainT:0, pop:null, bestChain:0,
   crt:false, stars:[]
@@ -753,7 +756,7 @@ function update(dt){
   state.eclipse = bf<49 ? 0 : bf<61 ? (bf-49)/12 : bf<68 ? 1 : bf<72 ? 1-(bf-68)/4 : 0;
   state.night = state.light < 0.32;
   state.rain    = keyed(W_RAIN, bf);
-  state.mist    = keyed(W_MIST, bf);
+  state.chill   = keyed(W_CHILL, bf);
   state.cloud   = keyed(W_CLOUD, bf);
   state.dust    = keyed(W_DUST, bf);
   state.rainbow = keyed(W_RAINBOW, bf);
@@ -1171,12 +1174,14 @@ function drawHeadlights(horizon){
     ctx.lineTo(cx+58+swing, hy+1); ctx.lineTo(cx-58+swing, hy+1); ctx.closePath(); };
   ctx.save();
   ctx.beginPath(); ctx.rect(0,0,VW,VH); cone();
-  ctx.fillStyle = "rgba(2,3,8,0.90)"; ctx.fill("evenodd");
+  /* When the ambient light is already down, a 0.90 cone on top of it
+     multiplies out to near black. Ease it off as the eclipse deepens. */
+  ctx.fillStyle = "rgba(2,3,8,"+(0.90 - 0.56*clamp(state.eclipse,0,1)).toFixed(3)+")"; ctx.fill("evenodd");
   ctx.restore();
   ctx.globalCompositeOperation = "lighter";
   const g = ctx.createLinearGradient(0, bumper, 0, hy);
-  g.addColorStop(0,   "rgba(255,238,200,0.22)");
-  g.addColorStop(0.5, "rgba(255,226,170,0.10)");
+  g.addColorStop(0,   "rgba(255,238,200,0.30)");
+  g.addColorStop(0.5, "rgba(255,226,170,0.14)");
   g.addColorStop(1,   "rgba(255,220,160,0)");
   ctx.save(); ctx.beginPath(); cone(); ctx.clip();
   ctx.fillStyle = g; ctx.fillRect(0, hy, VW, VH-hy);
@@ -1294,12 +1299,6 @@ function render(){
 
 /* Rain, mist, the light level and the eclipse, over the finished frame. */
 function weatherPass(horizon){
-  if (state.mist > 0.02){
-    const g = ctx.createLinearGradient(0, Math.max(0,horizon-16), 0, VH);
-    g.addColorStop(0, "rgba(214,226,236,"+(0.55*state.mist).toFixed(3)+")");
-    g.addColorStop(1, "rgba(214,226,236,0)");
-    ctx.fillStyle = g; ctx.fillRect(0, Math.max(0,horizon-16), VW, VH);
-  }
   if (state.rain > 0.02){
     if (!state.rainDrops.length)
       for (let i=0;i<80;i++) state.rainDrops.push({x:Math.random()*VW, y:Math.random()*VH,
@@ -1316,6 +1315,14 @@ function weatherPass(horizon){
     ctx.fillStyle="rgba(150,180,220,"+(0.05*state.rain).toFixed(3)+")";
     ctx.fillRect(0, Math.max(0,horizon), VW, VH-horizon);
     ctx.globalCompositeOperation="source-over";
+  }
+
+  // cool morning cast, burning off
+  if (state.chill > 0.02){
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = "rgba(176,200,238,"+(state.chill*0.55).toFixed(3)+")";
+    ctx.fillRect(0,0,VW,VH);
+    ctx.globalCompositeOperation = "source-over";
   }
 
   // the light level
@@ -1463,10 +1470,10 @@ function drawOverlayScreen(){
     txt("LIEBEZEIT", VW/2, 62, "#ff6ad0", 19, "center");
     txt("LAGUNA SECA · CABINET THREE", VW/2, 88, "#ffc46a", 8, "center");
     txt("THREAD THE TRAFFIC", VW/2, 112, "#7ad0ff", 9, "center");
-    txt("KEEP THE CHAIN ALIVE", VW/2, 124, "#7ad0ff", 9, "center");
+    txt("MISS EVERYTHING", VW/2, 124, "#7ad0ff", 9, "center");
     const blink = (t%1) < 0.6;
     if (blink) txt("SPACE OR TAP", VW/2, 172, "#f4f0e4", 10, "center");
-    txt("CONTACT BREAKS THE CHAIN", VW/2, VH-40, "#6a6458", 8, "center");
+    txt("EACH CLEAN PASS PAYS MORE", VW/2, VH-40, "#6a6458", 8, "center");
     txt(VERSION, VW/2, VH-24, "#8a8478", 8, "center");
   } else if (state.mode==="over"){
     txt("OUT OF TIME", VW/2, 70, "#ff5a3c", 18, "center");
