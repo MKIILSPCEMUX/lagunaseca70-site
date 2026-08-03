@@ -42,7 +42,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v0.9.7 · 2 Aug";
+const VERSION      = "v1.0.0 · 3 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -103,12 +103,12 @@ const VW = 224, VH = 320;   // portrait, matching Dark Star and Sneca
    explains itself instead of being an arbitrary night. */
 const SECTIONS = [
  { bar:1,  weather:"mist",    curve:0.35, hill:0.30, density:0.5,
-   sky:["#22345e","#8fa8c8"], mtn:"#33405e", haze:"#c8d4e0",
+   sky:["#101b4a","#8a3f74","#ff9a5c"], mtn:"#2e2f52", haze:"#ffb488",
    ground:["#2d6f56","#26604a"], rumble:["#f0f4f8","#c4423a"],
    road:["#63686f","#5d6269"], lane:"#eef2f6", obj:["#1c5a44","#144836","#5a5a52"] },
 
  { bar:5,  weather:"mist",    curve:0.42, hill:0.45, density:0.5,
-   sky:["#2a4a96","#dcb894"], mtn:"#3e3e6a", haze:"#e4c8ac",
+   sky:["#16276a","#b8548a","#ffbc80"], mtn:"#3a3660", haze:"#ffd0a4",
    ground:["#31895a","#297a4e"], rumble:["#ffffff","#dc3c34"],
    road:["#6a6d76","#63666f"], lane:"#fafcff", obj:["#1f7a44","#155e34","#7a5c38"] },
 
@@ -163,12 +163,12 @@ const SECTIONS = [
    road:["#7a7a86","#73737f"], lane:"#ffffff", obj:["#1f9c46","#137a36","#ffd23a"] },
 
  { bar:77, weather:"sunset",  curve:0.88, hill:0.92, density:1,
-   sky:["#8a2a5a","#ff8a2a"], mtn:"#6a2a58", haze:"#ff7a3a",
+   sky:["#2c0a52","#c43268","#ff8a2a"], mtn:"#6a2a58", haze:"#ff7a3a",
    ground:["#8a5a3a","#764c30"], rumble:["#ffffff","#e0342c"],
    road:["#6e6068","#675960"], lane:"#ffe8d0", obj:["#7a3a30","#5e2c26","#ff9a3a"] },
 
  { bar:93, weather:"dusk",    curve:0.40, hill:0.32, density:0.5,
-   sky:["#1b2a56","#a86a6a"], mtn:"#2c2a48", haze:"#c48a80",
+   sky:["#0e1740","#5e3a72","#c47a76"], mtn:"#2c2a48", haze:"#c48a80",
    ground:["#2a4a44","#23403a"], rumble:["#d8d0c0","#c4302a"],
    road:["#4b4b55","#474751"], lane:"#d4cfbc", obj:["#1a3a2c","#143020","#4a4a5a"] },
 ];
@@ -190,7 +190,7 @@ function keyed(keys, x){
 /* No fog. A translucent white sheet over the road reads as a rendering
    fault, not as weather. The morning is cool light instead: a blue cast
    that burns off over the first eight bars. */
-const W_CHILL   = [[1,1.0],[5,0.72],[9,0.22],[13,0.0],[96,0.0]];
+const W_CHILL   = [[1,0.55],[5,0.38],[9,0.12],[13,0.0],[96,0.0]];
 const W_DUST    = [[1,0.0],[15,0.0],[18,1.0],[24,1.0],[28,0.0],[96,0.0]];
 const W_CLOUD   = [[1,0.0],[23,0.0],[27,1.0],[33,1.0],[40,0.35],[47,0.0],[96,0.0]];
 const W_RAIN    = [[1,0.0],[27,0.0],[29,1.0],[33,1.0],[38,0.0],[96,0.0]];
@@ -198,7 +198,7 @@ const W_RAINBOW = [[1,0.0],[36,0.0],[39,1.0],[45,1.0],[49,0.0],[96,0.0]];
 
 /* Daylight as a smooth curve rather than a step per section, so the
    eclipse creeps in over twelve bars instead of switching on. */
-const LIGHT_KEYS = [[1,0.72],[6,0.90],[9,1.00],[26,1.00],[29,0.62],[33,0.80],
+const LIGHT_KEYS = [[1,0.80],[6,0.94],[9,1.00],[26,1.00],[29,0.62],[33,0.80],
                     [45,0.95],[49,0.92],[55,0.72],[58,0.44],[61,0.34],[68,0.34],
                     [70,1.05],[77,0.92],[88,0.70],[93,0.46],[97,0.30]];
 function lightAt(barF){
@@ -393,14 +393,14 @@ const state = {
   section:SECTIONS[0], prevSection:SECTIONS[0], blend:1,
   bar:1, musicT:0,
   position:0, playerX:0, speed:0, throttle:1,
-  lean:0,
+  lean:0, finishAt:0,
   segments:[], genCurve:0, genY:0, genBar:0,
   barStart:[], roadBarCursor:1,
   scenery:[], traffic:[], meteors:[], fxQueue:[],
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
-  banner:0, bannerSec:null, cue:"", cueT:0,
-  light:0.5, eclipse:0, night:false, rain:0, chill:1, cloud:0, dust:0, rainbow:0, rainDrops:[],
+  banner:0, bannerSec:null, cue:"", cueT:0, outroT:0,
+  light:0.5, eclipse:0, night:false, bolt:null, boltT:0, nextBolt:0, rain:0, chill:1, cloud:0, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
   hitFlash:0, snareFlash:0, kickFlash:0, chain:0, chainT:0, pop:null, bestChain:0,
   crt:false, stars:[]
@@ -537,6 +537,21 @@ function update(dt){
   Audio8.tick(dt);
   Audio8.pump();
 
+  if (state.mode === "outro"){
+    /* The camera stops at the line. You keep going, small and smaller,
+       until the road takes you. */
+    state.outroT += dt;
+    // the camera is fixed at the line: the road stops, the car does not
+    state.speed *= (1 - 0.55*dt);
+    state.shake = Math.max(0, state.shake - dt*4);
+    if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
+    if (state.outroT > 6.5){
+      state.mode = "finish";
+      if (typeof LEADERBOARD_ENABLED !== "undefined" && LEADERBOARD_ENABLED && window.Leaderboard)
+        Leaderboard.submit(Math.floor(state.score));
+    }
+    return;
+  }
   if (state.mode !== "play"){
     state.banner = Math.max(0, state.banner - dt);
     return;
@@ -548,6 +563,11 @@ function update(dt){
   const bar  = Math.floor(barF) + 1;
 
   if (bar > TOTAL_BARS){ finish(); return; }
+  if (state.musicT > SONG_LEN - 5.0 && !state.finishAt){
+    // put the line five seconds of music ahead, so you drive through it
+    state.finishAt = state.position + state.speed * 4.6;
+  }
+  if (state.finishAt && state.position > state.finishAt){ finish(); return; }
 
   if (bar !== state.bar){
     state.bar = bar;
@@ -573,6 +593,31 @@ function update(dt){
   state.cloud   = keyed(W_CLOUD, bf);
   state.dust    = keyed(W_DUST, bf);
   state.rainbow = keyed(W_RAINBOW, bf);
+
+  /* Lightning, only while it is actually raining. Struck on a downbeat so
+     it lands with the track rather than at random. */
+  if (state.rain > 0.45){
+    if (state.musicT > state.nextBolt){
+      state.nextBolt = state.musicT + rnd(2.4, 5.2);
+      const seg = [];
+      let x = rnd(VW*0.15, VW*0.85), y = 0;
+      const bottom = VH*0.34;
+      while (y < bottom){
+        const ny = y + rnd(8, 18), nx = x + rnd(-14, 14);
+        seg.push([x,y,nx,ny]);
+        if (Math.random() < 0.30){                       // a fork
+          let fx = nx, fy = ny;
+          for (let k=0;k<3;k++){
+            const gx = fx + rnd(-16,16), gy = fy + rnd(7,15);
+            seg.push([fx,fy,gx,gy]); fx = gx; fy = gy;
+          }
+        }
+        x = nx; y = ny;
+      }
+      state.bolt = seg; state.boltT = 0.42;
+    }
+  } else { state.bolt = null; state.nextBolt = state.musicT + 1.5; }
+  if (state.boltT > 0) state.boltT = Math.max(0, state.boltT - dt);
 
 
   /* --- speed, then steering -------------------------------- */
@@ -691,14 +736,17 @@ function crash(mag){
   if (Audio8.ctx) Audio8.hit(Audio8.ctx.currentTime, 0.25, 0.35, 300);
 }
 function gameOver(){ state.mode = "over"; Audio8.stop(); }
-function finish(){ state.mode = "finish"; Audio8.stop(); }
+function finish(){
+  state.mode = "outro"; state.outroT = 0;
+  state.bestChain = Math.max(state.bestChain, state.chain);
+}
 
 function startRun(){
   state.mode="play";
   state.section = SECTIONS[0]; state.prevSection = SECTIONS[0]; state.blend = 1;
   state.bar=1; state.musicT=0; state.position=0; state.playerX=0;
   state.speed=BASE_SPEED*0.4; state.throttle=0.94;
-  state.lean=0;
+  state.lean=0; state.finishAt=0; state.outroT=0;
   state.segments.length=0; state.genCurve=0; state.genY=0; state.genBar=0;
   state.barStart.length=0; state.roadBarCursor=1;
   state.scenery.length=0; state.traffic.length=0; state.meteors.length=0;
@@ -745,9 +793,16 @@ function quad(c, x1,y1,w1, x2,y2,w2, col){
 const SKY_BANDS = 7;
 function drawSky(horizon){
   const h = Math.max(horizon, 1);
+  /* A two-colour ramp goes muddy through the middle. Sections may carry a
+     third, mid-sky colour and the ramp runs top -> mid -> horizon. */
+  const three = state.section.sky.length > 2 && state.prevSection.sky.length > 2;
   for (let i=0;i<SKY_BANDS;i++){
     const t0 = i/SKY_BANDS, t1 = (i+1)/SKY_BANDS;
-    ctx.fillStyle = mixHex(pal("sky",0), pal("sky",1), Math.pow(t0, 0.78));
+    const u  = Math.pow(t0, 0.78);
+    ctx.fillStyle = three
+      ? (u < 0.5 ? mixHex(pal("sky",0), pal("sky",1), u*2)
+                 : mixHex(pal("sky",1), pal("sky",2), (u-0.5)*2))
+      : mixHex(pal("sky",0), pal("sky",state.section.sky.length-1), u);
     ctx.fillRect(0, Math.floor(t0*h), VW, Math.ceil((t1-t0)*h)+1);
   }
   const w = state.section.weather;
@@ -919,14 +974,68 @@ function drawCar(c, x, y, sc, clipY){
   if (clipped) ctx.restore();
 }
 
+/* The finishing line: a chequered strip across the road, a banner over it
+   on two posts, and Kalinka standing at the verge waiting for you. */
+function drawFinishLine(segs, baseIdx, horizon){
+  const n = Math.floor(state.finishAt/SEGLEN) - baseIdx;
+  if (n < 1 || n >= DRAW_DIST) return;
+  const seg = segs[baseIdx + n]; if (!seg || !seg.p1.screen.scale) return;
+  const sc = seg.p1.screen.scale, sx = seg.p1.screen.x, sy = seg.p1.screen.y, sw = seg.p1.screen.w;
+  if (sy > VH + 60 || sw < 2) return;
+  const u = q => sc * q * ROAD_W * VW/2;
+
+  // chequered strip on the tarmac
+  const cells = 10, cw = (sw*2)/cells, ch = Math.max(2, sw*0.13);
+  for (let i=0;i<cells;i++){
+    ctx.fillStyle = (i%2) ? "#12120f" : "#ffffff";
+    ctx.fillRect(sx - sw + i*cw, sy - ch, cw+1, ch);
+  }
+  // posts and banner
+  const ph = u(0.9), pw = Math.max(1, u(0.05));
+  ctx.fillStyle = "#e8e2d0";
+  ctx.fillRect(sx - sw - pw, sy - ph, pw*2, ph);
+  ctx.fillRect(sx + sw - pw, sy - ph, pw*2, ph);
+  const bh = Math.max(3, u(0.26));
+  ctx.fillStyle = "#f4f0e0";
+  ctx.fillRect(sx - sw - pw, sy - ph, sw*2 + pw*2, bh);
+  ctx.strokeStyle = "#000"; ctx.lineWidth = Math.max(1, u(0.02));
+  ctx.strokeRect(sx - sw - pw, sy - ph, sw*2 + pw*2, bh);
+  if (bh > 7){
+    ctx.fillStyle = "#c4241a";
+    ctx.font = "bold "+Math.round(bh*0.62)+"px ui-monospace, Menlo, monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("FINISH", sx, sy - ph + bh*0.55);
+  }
+  // Kalinka, at the verge, tail going
+  const kx = sx + u(1.5), ky = sy, kw = Math.max(2, u(0.16));
+  if (kw > 2){
+    const wag = Math.sin(state.musicT*9)*kw*0.5;
+    ctx.fillStyle="#e09a4a";
+    ctx.fillRect(kx-kw, ky-kw*1.5, kw*2, kw*1.0);
+    ctx.fillRect(kx+kw*0.7, ky-kw*2.1, kw*0.7, kw*0.9);
+    ctx.fillStyle="#c47a34";
+    ctx.fillRect(kx+kw*0.72, ky-kw*2.7, kw*0.22, kw*0.7);
+    ctx.fillRect(kx+kw*1.15, ky-kw*2.7, kw*0.22, kw*0.7);
+    ctx.fillRect(kx-kw*1.5+wag, ky-kw*1.9, kw*0.6, kw*0.22);
+    ctx.fillStyle="#fff2dc";
+    ctx.fillRect(kx-kw*0.9, ky-kw*0.5, kw*0.4, kw*0.5);
+    ctx.fillRect(kx+kw*0.4, ky-kw*0.5, kw*0.4, kw*0.5);
+  }
+}
+
 /* Flat sprite, drawn straight on. The body shifts a little under load but
    nothing rotates, so there is no angle at which it can look wrong. */
 function drawPlayerCar(){
   const bob = Math.sin(state.musicT*Math.PI/TICK)*0.5;
   const t   = state.lean*26;
-  const cx = Math.round(VW/2 + state.lean*16 + (state.shake ? rnd(-state.shake,state.shake) : 0));
-  const cy = Math.round(VH - 24 + bob + (state.shake ? rnd(-state.shake,state.shake)*0.5 : 0));
-  const w = 54, h = 30;
+  // in the outro the camera holds and the car drives away from it
+  const o  = state.mode === "outro" ? clamp(state.outroT/5.2, 0, 1) : 0;
+  const sh = 1 - o*0.93;
+  const cx = Math.round(VW/2 + state.lean*16*sh + (state.shake ? rnd(-state.shake,state.shake) : 0));
+  const cy = Math.round(lerp(VH - 24, VH*0.36, o*o) + bob*sh);
+  if (o > 0.985) return;
+  const w = 54*sh, h = 30*sh;
+  ctx.save();
 
   ctx.strokeStyle="#000"; ctx.lineWidth=2;
   ctx.fillStyle="rgba(0,0,0,.45)";
@@ -957,7 +1066,7 @@ function drawPlayerCar(){
   box(cx-13, cy-4, 26, 8, "#f0d84a");                       // plate
   ctx.fillStyle="#20242c"; ctx.font="bold 6px ui-monospace, monospace";
   ctx.textAlign="center"; ctx.textBaseline="top";
-  ctx.fillText("F400 PTF", cx, cy-3);
+  ctx.fillText("SECA 900", cx, cy-3);
 
   // left-hand drive: you are on the left, Kalinka rides on the right
   const gy = cy-h-3, lean = -state.lean*9;
@@ -970,6 +1079,7 @@ function drawPlayerCar(){
   ctx.fillStyle="#000";
   ctx.fillRect(cx+w*0.13+t+lean+2, gy+3, 1, 1);
   ctx.fillRect(cx+w*0.13+t+lean+5, gy+3, 1, 1);
+  ctx.restore();
 }
 
 /* The beam starts at the bumper and swings with the wheel. Before, it was
@@ -1082,6 +1192,7 @@ function render(){
     }
   }
 
+  if (state.finishAt) drawFinishLine(segs, baseIdx, horizon);
   if (state.night) drawHeadlights(horizon);
   drawPlayerCar();
 
@@ -1127,12 +1238,27 @@ function weatherPass(horizon){
     ctx.globalCompositeOperation="source-over";
   }
 
-  // cool morning cast, burning off
+  // cool morning cast on the ground only; the sunrise above stays vivid
   if (state.chill > 0.02){
     ctx.globalCompositeOperation = "multiply";
-    ctx.fillStyle = "rgba(176,200,238,"+(state.chill*0.55).toFixed(3)+")";
-    ctx.fillRect(0,0,VW,VH);
+    ctx.fillStyle = "rgba(168,192,236,"+(state.chill*0.62).toFixed(3)+")";
+    ctx.fillRect(0, Math.max(0,horizon), VW, VH);
     ctx.globalCompositeOperation = "source-over";
+  }
+
+  /* the strike: a white flash, then the bolt itself for a few frames */
+  if (state.bolt && state.boltT > 0){
+    const b = state.boltT;
+    if (b > 0.30){
+      ctx.fillStyle = "rgba(226,238,255,"+(((b-0.30)/0.12)*0.62).toFixed(3)+")";
+      ctx.fillRect(0,0,VW,VH);
+    }
+    if (b > 0.24 || (b > 0.10 && b < 0.16)){
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.beginPath();
+      for (const [x0,y0,x1,y1] of state.bolt){ ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); }
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(180,214,255,0.55)"; ctx.lineWidth = 5; ctx.stroke();
+    }
   }
 
   // the light level
@@ -1269,6 +1395,93 @@ function drawHUD(){
   }
 }
 
+/* The Nova head on, for the title screen. Lofi arcade: flat colour, hard
+   black edges, lamps lit. Mike driving on the left, Kalinka riding. */
+function drawNovaFront(cx, cy, sc){
+  const W = 62*sc, H = 40*sc;
+  const R = (x,y,w,h,f)=>{ ctx.fillStyle=f; ctx.fillRect(cx+x*sc, cy+y*sc, w*sc, h*sc);
+    ctx.strokeRect(cx+x*sc, cy+y*sc, w*sc, h*sc); };
+  ctx.strokeStyle="#000"; ctx.lineWidth=Math.max(1.5, 2*sc);
+  ctx.lineJoin="round";
+
+  // headlamp spill on the ground
+  ctx.globalCompositeOperation="lighter";
+  for (const side of [-1,1]){
+    const g = ctx.createRadialGradient(cx+side*20*sc, cy+2*sc, 2*sc, cx+side*20*sc, cy+2*sc, 44*sc);
+    g.addColorStop(0,"rgba(255,244,206,0.55)"); g.addColorStop(1,"rgba(255,230,170,0)");
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx+side*20*sc, cy+6*sc, 44*sc, 0, 7); ctx.fill();
+  }
+  ctx.globalCompositeOperation="source-over";
+
+  ctx.fillStyle="rgba(0,0,0,.45)";
+  ctx.beginPath(); ctx.ellipse(cx, cy+30*sc, 34*sc, 5*sc, 0, 0, 7); ctx.fill();
+
+  // wheels peeking
+  R(-33,  14, 6, 12, "#141418");
+  R( 27,  14, 6, 12, "#141418");
+  // roof spoiler ears
+  R(-34, -34, 9, 4, "#15151a");
+  R( 25, -34, 9, 4, "#15151a");
+  // roof and screen surround
+  R(-27, -37, 54, 6, "#a81c14");
+  // windscreen
+  R(-26, -31, 52, 17, "#16273f");
+  ctx.fillStyle="#2c4a76"; ctx.fillRect(cx-24*sc, cy-29*sc, 48*sc, 6*sc);
+  // wiper
+  ctx.strokeStyle="#0c0c10"; ctx.lineWidth=Math.max(1,1.4*sc);
+  ctx.beginPath(); ctx.moveTo(cx-16*sc, cy-15*sc); ctx.lineTo(cx-2*sc, cy-22*sc); ctx.stroke();
+  ctx.strokeStyle="#000"; ctx.lineWidth=Math.max(1.5, 2*sc);
+
+  // Mike, left-hand drive, black cap and blue eyes
+  const mx = -17;
+  ctx.fillStyle="#d8a97e"; ctx.fillRect(cx+mx*sc, cy-27*sc, 13*sc, 11*sc);
+  ctx.fillStyle="#15151a"; ctx.fillRect(cx+(mx-1)*sc, cy-30*sc, 15*sc, 5*sc);
+  ctx.fillRect(cx+(mx-4)*sc, cy-26*sc, 5*sc, 2*sc);          // peak
+  ctx.fillStyle="#2f7ad0"; ctx.fillRect(cx+(mx+2)*sc, cy-23*sc, 3*sc, 3*sc);
+  ctx.fillRect(cx+(mx+8)*sc, cy-23*sc, 3*sc, 3*sc);
+  ctx.fillStyle="#0a0a0e"; ctx.fillRect(cx+(mx+3)*sc, cy-22*sc, 1*sc, 1*sc);
+  ctx.fillRect(cx+(mx+9)*sc, cy-22*sc, 1*sc, 1*sc);
+  ctx.fillStyle="#9c7050"; ctx.fillRect(cx+(mx+4)*sc, cy-18*sc, 5*sc, 1*sc);
+
+  // Kalinka, riding
+  const kx = 6;
+  ctx.fillStyle="#e09a4a"; ctx.fillRect(cx+kx*sc, cy-26*sc, 13*sc, 11*sc);
+  ctx.fillStyle="#c47a34";
+  ctx.fillRect(cx+kx*sc, cy-31*sc, 4*sc, 6*sc);
+  ctx.fillRect(cx+(kx+9)*sc, cy-31*sc, 4*sc, 6*sc);
+  ctx.fillStyle="#fff2dc"; ctx.fillRect(cx+(kx+3)*sc, cy-20*sc, 7*sc, 5*sc);
+  ctx.fillStyle="#0a0a0e";
+  ctx.fillRect(cx+(kx+2)*sc, cy-23*sc, 2*sc, 2*sc);
+  ctx.fillRect(cx+(kx+9)*sc, cy-23*sc, 2*sc, 2*sc);
+  ctx.fillRect(cx+(kx+5)*sc, cy-19*sc, 3*sc, 2*sc);
+
+  // bonnet, body, bumper
+  R(-31, -14, 62, 12, "#c4241a");
+  ctx.fillStyle="#e8412c"; ctx.fillRect(cx-28*sc, cy-12*sc, 56*sc, 4*sc);
+  R(-33,  -2, 66, 12, "#b81f16");
+  R(-33,  10, 66,  7, "#8f1710");
+
+  // lamps
+  R(-30, -12, 15, 9, "#fff6cc");
+  R( 15, -12, 15, 9, "#fff6cc");
+  ctx.fillStyle="#ffd24a";
+  ctx.fillRect(cx-28*sc, cy-10*sc, 11*sc, 5*sc);
+  ctx.fillRect(cx+17*sc, cy-10*sc, 11*sc, 5*sc);
+  // grille and badge
+  R(-13, -12, 26, 9, "#1a1a1e");
+  ctx.fillStyle="#4a4a50";
+  for (let i=0;i<3;i++) ctx.fillRect(cx-11*sc, cy-(11-i*3)*sc, 22*sc, 1*sc);
+  ctx.fillStyle="#e8e2d0"; ctx.font="bold "+Math.round(5*sc)+"px ui-monospace, monospace";
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillText("GSi", cx, cy-7.5*sc);
+  // intake and plate
+  R(-16,  11, 32,  5, "#101014");
+  R(-15,  -1, 30,  8, "#f4f2ea");
+  ctx.fillStyle="#15151a"; ctx.font="bold "+Math.round(6*sc)+"px ui-monospace, monospace";
+  ctx.fillText("SECA 900", cx, cy+3*sc);
+  ctx.textBaseline="top";
+}
+
 function drawOverlayScreen(){
   ctx.fillStyle="#0a0810"; ctx.fillRect(0,0,VW,VH);
   const t = performance.now()/1000;
@@ -1277,19 +1490,12 @@ function drawOverlayScreen(){
     ctx.fillRect(Math.round(s.x*VW), Math.round(s.y*VH*1.6), 1, 1);
   }
   if (state.mode==="title"){
-    txt("LIEBEZEIT", VW/2, 62, "#ff6ad0", 19, "center");
-    txt("LAGUNA SECA · CABINET THREE", VW/2, 88, "#ffc46a", 8, "center");
-    txt("THREAD THE TRAFFIC", VW/2, 112, "#7ad0ff", 9, "center");
-    txt("MISS EVERYTHING", VW/2, 124, "#7ad0ff", 9, "center");
-    const blink = (t%1) < 0.6;
-    if (blink) txt("SPACE OR TAP", VW/2, 172, "#f4f0e4", 10, "center");
+    txt("LIEBEZEIT", VW/2, 26, "#ff6ad0", 21, "center");
+    txt("THREAD THE TRAFFIC", VW/2, 54, "#ffc46a", 9, "center");
+    drawNovaFront(VW/2, 176, 1.35);
+    if ((t%1)<0.6) txt("PRESS SPACE OR TAP", VW/2, 244, "#f4f0e4", 10, "center");
     txt("EACH CLEAN PASS PAYS MORE", VW/2, VH-40, "#6a6458", 8, "center");
     txt(VERSION, VW/2, VH-24, "#8a8478", 8, "center");
-  } else if (state.mode==="over"){
-    txt("OUT OF TIME", VW/2, 70, "#ff5a3c", 18, "center");
-    txt("BEST CHAIN x"+state.bestChain, VW/2, 94, "#ffc46a", 9, "center");
-    txt("SCORE "+Math.floor(state.score).toLocaleString("en-GB"), VW/2, 110, "#f4f0e4", 11, "center");
-    if ((t%1)<0.6) txt("SPACE / TAP TO RETRY", VW/2, 146, "#7ad0ff", 9, "center");
   } else {
     txt("GOAL", VW/2, 60, "#ffe066", 26, "center");
     txt("BEST CHAIN x"+state.bestChain, VW/2, 94, "#ff6ad0", 9, "center");
@@ -1439,7 +1645,7 @@ let last = performance.now();
 function frame(now){
   const dt = Math.min(0.05, (now - last)/1000); last = now;
   update(dt);
-  if (state.mode === "play") render(); else { drawOverlayScreen(); }
+  if (state.mode === "play" || state.mode === "outro") render(); else { drawOverlayScreen(); }
   present();
   requestAnimationFrame(frame);
 }

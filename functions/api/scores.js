@@ -18,9 +18,9 @@
  *   BUTTONDOWN_API_KEY  (secret)        — no longer used (opt-in is client-side embed)
  */
 
-const GAMES = ['darkstar', 'sneca'];
+const GAMES = ['darkstar', 'sneca', 'liebezeit'];
 // Plausible ceilings. A real run stays well under these; anything above is junk.
-const CAP = { darkstar: 12000, sneca: 700 };
+const CAP = { darkstar: 12000, sneca: 700, liebezeit: 250000 };
 const PAD = 7;                                    // width for the sortable inverse-score key
 const DEFAULT_CLOSE = '2026-08-14T19:00:00Z';     // 8pm UK time (BST) on Fri 14 Aug 2026; override with COMPETITION_CLOSE
 
