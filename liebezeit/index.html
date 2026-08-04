@@ -117,8 +117,20 @@
     .controls .pads { flex: 1; display: flex; gap: 8px; margin: 0; }
     .controls .pad { border-radius: 14px; padding: 0; font-size: 12px; }
     @media (pointer: coarse) { .controls { display: flex; } }
-    .pad:active { transform: translateY(1px); filter: brightness(0.92); }
     @media (pointer: coarse) { .pads { display: flex; } }
+
+    /* Pedals are unlit until you hold them, then they come up. The .lit class
+       is driven off the game's own input state, so the keyboard lights them
+       too and there is no doubt about which one is actually down. */
+    .pad { transition: filter 60ms linear, box-shadow 60ms linear, transform 60ms linear;
+      filter: brightness(0.66) saturate(0.8); }
+    .pad.lit { transform: translateY(1px); filter: brightness(1.18) saturate(1.2); }
+    .pad-gas.lit   { box-shadow: 0 0 0 2px rgba(150,255,180,0.9),
+                                 0 0 18px 3px rgba(47,191,82,0.75),
+                                 inset 0 1px 0 rgba(255,255,255,0.6); }
+    .pad-brake.lit { box-shadow: 0 0 0 2px rgba(255,175,165,0.9),
+                                 0 0 18px 3px rgba(224,52,44,0.75),
+                                 inset 0 1px 0 rgba(255,255,255,0.5); }
 
     .switches { display: flex; gap: 12px; margin: 14px 4px 8px; }
     .switch { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -173,7 +185,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.0.3</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.0.4</div>
       </div>
 
       <div class="bezel">
@@ -211,7 +223,7 @@
       <div class="hull-foot">
         <span class="foot-play">Arrows to steer &middot; up and down for the pedal</span>
         <span class="foot-play">Thread the traffic &middot; miss everything</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v1.0.3</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v1.0.4</span>
       </div>
     </div>
   </div>
@@ -245,7 +257,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.0.2 · 3 Aug";
+const VERSION      = "v1.0.4 · 4 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -395,7 +407,10 @@ function keyed(keys, x){
    that burns off over the first eight bars. */
 /* The road empties as the light goes and fills again when the drums come
    back at bar 69, so totality is quiet and the drop is a wall of cars. */
-const W_TRAFFIC = [[1,1.0],[50,1.0],[56,0.45],[61,0.14],[68,0.14],[70,1.25],[76,1.15],[96,1.0]];
+/* The breakdown thins the road out but should never empty it, and the road
+   has to be full again by the time the drums land on 69. Refilling starts at
+   65 and is done by 68, which gives the cars a bar to actually arrive in. */
+const W_TRAFFIC = [[1,1.0],[50,1.0],[56,0.60],[61,0.38],[65,0.38],[68,1.20],[74,1.15],[96,1.0]];
 const W_CHILL   = [[1,0.55],[5,0.38],[9,0.12],[13,0.0],[96,0.0]];
 const W_DUST    = [[1,0.0],[15,0.0],[18,1.0],[24,1.0],[28,0.0],[96,0.0]];
 const W_CLOUD   = [[1,0.0],[23,0.0],[27,1.0],[33,1.0],[40,0.35],[47,0.0],[96,0.0]];
@@ -773,7 +788,7 @@ function update(dt){
     if (state.outroT > 6.5){
       state.mode = "finish";
       if (typeof LEADERBOARD_ENABLED !== "undefined" && LEADERBOARD_ENABLED && window.Leaderboard)
-        Leaderboard.submit(Math.floor(state.score));
+        Leaderboard.onGameOver(Math.floor(state.score));
     }
     return;
   }
@@ -972,7 +987,11 @@ function crash(mag){
 function gameOver(){
   state.mode = "over"; Audio8.stop(); document.body.classList.remove("playing");
   state.bestChain = Math.max(state.bestChain, state.chain);
-  if (LEADERBOARD_ENABLED && window.Leaderboard) Leaderboard.submit(Math.floor(state.score));
+  /* onGameOver, not submit. submit() is the modal's own button handler and is
+     not on the public object, so this line used to throw a TypeError from
+     inside update(), which killed the frame loop before it could draw the
+     end screen. That is the "my score didn't load" bug. */
+  if (LEADERBOARD_ENABLED && window.Leaderboard) Leaderboard.onGameOver(Math.floor(state.score));
 }
 function finish(){
   state.mode = "outro"; state.outroT = 0;
@@ -1805,7 +1824,7 @@ function drawOverlayScreen(){
     txt("EACH CLEAN PASS PAYS MORE", VW/2, VH-40, "#6a6458", 8, "center");
     txt(VERSION, VW/2, VH-24, "#8a8478", 8, "center");
   } else {
-    txt("GOAL", VW/2, 60, "#ffe066", 26, "center");
+    txt(state.mode==="over" ? "TIME UP" : "FINISH", VW/2, 60, "#ffe066", 26, "center");
     txt("BEST CHAIN x"+state.bestChain, VW/2, 94, "#ff6ad0", 9, "center");
     txt("SCORE "+Math.floor(state.score).toLocaleString("en-GB"), VW/2, 112, "#f4f0e4", 12, "center");
     if ((t%1)<0.6) txt("SPACE / TAP TO GO AGAIN", VW/2, 148, "#7ad0ff", 9, "center");
@@ -1948,6 +1967,18 @@ addEventListener("mouseup",        e=>pointer(e,false));
     el.addEventListener("mousedown",on); el.addEventListener("mouseup",off);
     el.addEventListener("mouseleave",off);};
   bind(".pad-gas","up"); bind(".pad-brake","down");
+  /* The pads sit dim and come up bright while held, so you can see at a glance
+     which one your thumb is on. Driven off the input state rather than the
+     touch handlers, so the keyboard lights them too. */
+  (function(){
+    const gas = document.querySelector(".pad-gas"), brake = document.querySelector(".pad-brake");
+    if (!gas || !brake) return;
+    (function tick(){
+      gas.classList.toggle("lit", !!input.up);
+      brake.classList.toggle("lit", !!input.down);
+      requestAnimationFrame(tick);
+    })();
+  })();
 
   /* The wheel.
 
@@ -1960,18 +1991,34 @@ addEventListener("mouseup",        e=>pointer(e,false));
   const wheel = document.querySelector("#wheel");
   const wcv   = document.querySelector("#wheelCv");
   if (wheel && wcv){
-    const WW = 132, WH = 74;
-    wcv.width = WW; wcv.height = WH;
+    /* The canvas matches the pad's own box rather than a fixed 132x74 that
+       got stretched sideways to fit. A wheel drawn round stays round. */
+    let WW = 176, WH = 74;
     const w = wcv.getContext("2d");
+    const fit = () => {
+      const r = wheel.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      const nw = Math.round(r.width), nh = Math.round(r.height);
+      if (nw === WW && nh === WH) return;
+      WW = nw; WH = nh; wcv.width = WW; wcv.height = WH;
+    };
+    wcv.width = WW; wcv.height = WH;
+    fit();
+    new ResizeObserver(fit).observe(wheel);
     let touchId = null;
 
+    /* Dead zone unchanged. GAIN shortens the travel between leaving the dead
+       zone and hitting full lock: at 2.2 you are on the stop about two fifths
+       of the way out, instead of having to reach the edge of the pad. */
+    const DEAD = 0.10, GAIN = 2.2;
     const setFrom = clientX => {
       const r = wheel.getBoundingClientRect();
       const half = (r.width - 22) / 2;
       let v = ((clientX - r.left) - r.width/2) / half;
       v = Math.max(-1, Math.min(1, v));
-      const dead = 0.10;
-      input.axis = Math.abs(v) < dead ? 0 : Math.sign(v)*((Math.abs(v)-dead)/(1-dead));
+      const m = Math.abs(v);
+      input.axis = m < DEAD ? 0
+        : Math.sign(v) * Math.min(1, ((m - DEAD) / (1 - DEAD)) * GAIN);
     };
     const release = () => { touchId = null; input.axis = 0; };
     const findTouch = e => {
@@ -2007,46 +2054,95 @@ addEventListener("mouseup",        e=>pointer(e,false));
     addEventListener("mousemove", e => { if (touchId === "mouse") setFrom(e.clientX); });
     addEventListener("mouseup",   () => { if (touchId === "mouse") release(); });
 
-    /* An F1 wheel in the game's own idiom: flat top and bottom, chunky
-       grips, rev lights across the top, a little display in the middle.
-       The whole thing turns with your steering. */
-    const box = (x,y,ww,hh,fill,stroke) => {
-      w.fillStyle = fill; w.fillRect(x,y,ww,hh);
-      if (stroke !== false){ w.strokeStyle = "#000"; w.lineWidth = 2; w.strokeRect(x,y,ww,hh); }
+    /* A wheel in the PXN mould: a rounded-rectangular rim, yellow handgrips
+       at nine and three, a rev strip along the top and a small display in the
+       middle whose bar runs out from the centre, left or right. It turns with
+       your input. Drawn to the pad's real box so it never looks stretched. */
+    const rrect = (x,y,ww,hh,r) => {
+      const rr = Math.min(r, ww/2, hh/2);
+      w.beginPath();
+      w.moveTo(x+rr, y);
+      w.lineTo(x+ww-rr, y); w.quadraticCurveTo(x+ww, y, x+ww, y+rr);
+      w.lineTo(x+ww, y+hh-rr); w.quadraticCurveTo(x+ww, y+hh, x+ww-rr, y+hh);
+      w.lineTo(x+rr, y+hh); w.quadraticCurveTo(x, y+hh, x, y+hh-rr);
+      w.lineTo(x, y+rr); w.quadraticCurveTo(x, y, x+rr, y);
+      w.closePath();
     };
+    const plate = (x,y,ww,hh,r,fill,stroke) => {
+      rrect(x,y,ww,hh,r); w.fillStyle = fill; w.fill();
+      if (stroke !== false){ w.strokeStyle = stroke || "#05070c"; w.lineWidth = 2; w.stroke(); }
+    };
+
     const drawWheel = () => {
       const a = input.axis;
       w.clearRect(0,0,WW,WH);
+
+      // rim geometry, kept inside the box even at full lock
+      const hh = Math.min(WH*0.30, 23);        // half height
+      const hw = Math.min(WW*0.44, hh*2.35);   // half width
+      const th = Math.max(7, hh*0.40);         // rim thickness top and bottom
+      const tw = Math.max(10, hw*0.25);        // rim thickness at the sides
+
       w.save();
-      w.translate(WW/2, WH/2 + 1);
-      w.rotate(a * 0.30);
-      // rim: flat top and bottom, grips either side
-      box(-52,-26, 104, 14, "#2c313f");                 // top bar
-      box(-52, -4,  22, 30, "#2c313f");                 // left grip
-      box( 30, -4,  22, 30, "#2c313f");                 // right grip
-      box(-52, -12, 104, 10, "#232838");                // shoulder
-      // grip texture
-      w.fillStyle = "#1a1e2a";
-      for (let i=0;i<4;i++){ w.fillRect(-48, 2+i*6, 14, 3); w.fillRect(34, 2+i*6, 14, 3); }
-      // rev lights
-      const lit = Math.round(Math.abs(a)*9);
-      for (let i=0;i<9;i++){
-        const on = i < lit;
-        w.fillStyle = on ? (i<4 ? "#2fbf52" : i<7 ? "#ffc21e" : "#e0342c") : "#12151f";
-        w.fillRect(-42 + i*10, -23, 7, 8);
+      w.translate(WW/2, WH/2);
+      w.rotate(a * 0.26);
+
+      // body
+      plate(-hw, -hh, hw*2, hh*2, hh*0.62, "#2b3140");
+      // the window through it, which is what makes it read as a rim
+      rrect(-hw+tw, -hh+th, (hw-tw)*2, (hh-th)*2, (hh-th)*0.7);
+      w.fillStyle = "#0c0f17"; w.fill();
+      w.strokeStyle = "#171b26"; w.lineWidth = 2; w.stroke();
+      // horizontal spokes joining the grips to the boss
+      w.fillStyle = "#2b3140";
+      w.fillRect(-hw+tw-1, -hh*0.30, (hw-tw)*2+2, hh*0.60);
+      w.fillStyle = "#232838";
+      w.fillRect(-hw+tw-1, hh*0.16, (hw-tw)*2+2, 2);
+
+      // yellow handgrips
+      const gh = hh*1.86, gw = tw*1.20;
+      for (const s of [-1, 1]){
+        const gx = s < 0 ? -hw-1 : hw+1-gw;
+        plate(gx, -gh/2, gw, gh, gw*0.45, "#f0c22a");
+        w.fillStyle = "rgba(90,60,0,0.35)";
+        for (let i=0;i<4;i++) w.fillRect(gx+2, -gh/2 + gh*0.22 + i*(gh*0.16), gw-4, 2);
+        w.fillStyle = "rgba(255,242,180,0.5)";
+        w.fillRect(gx+2, -gh/2+3, gw-4, 2);
       }
-      // centre display
-      box(-26, -1, 52, 22, "#0c1410");
-      w.fillStyle = "#123020"; w.fillRect(-23, 2, 46, 16);
-      // steering readout inside it
+
+      // rev strip along the top, off the actual speed
+      const rev = Math.max(0, Math.min(1, (state.speed || 0) / BASE_SPEED / 1.08));
+      const N = 9, cw = Math.max(4, (hw*1.30)/N - 2), gap = 2;
+      const total = N*cw + (N-1)*gap, x0 = -total/2;
+      const lit = Math.round(rev * N);
+      for (let i=0;i<N;i++){
+        const on = i < lit;
+        w.fillStyle = on ? (i<4 ? "#2fbf52" : i<7 ? "#ffc21e" : "#e0342c") : "#141826";
+        w.fillRect(x0 + i*(cw+gap), -hh + 3, cw, Math.max(4, th-6));
+      }
+
+      // display
+      const dw = Math.min(hw*0.98, 62), dh = Math.min(hh*0.88, 19);
+      plate(-dw/2, -dh/2, dw, dh, 3, "#0a1410");
+      w.fillStyle = "#0e2a1c"; w.fillRect(-dw/2+3, -dh/2+3, dw-6, dh-6);
+
+      // the readout: out from the centre, left or right
+      const RW = dw/2 - 6, ty = -dh/2 + 5, thk = dh - 14;
+      w.fillStyle = "rgba(124,255,154,0.10)";
+      w.fillRect(-RW, ty, RW*2, thk);
+      w.fillStyle = "rgba(124,255,154,0.30)";
+      for (let i=-4;i<=4;i++) w.fillRect(Math.round(i*RW/4), ty+thk+1, 1, 2);
+      const bw = Math.round(a * RW);
       w.fillStyle = "#7cff9a";
-      const bx = Math.round(a * 20);
-      w.fillRect(-2 + bx, 5, 4, 10);
-      w.fillStyle = "rgba(124,255,154,0.28)";
-      w.fillRect(-1, 9, 2, 2);
-      for (let i=-4;i<=4;i++) w.fillRect(i*5-0.5, 17, 1, 2);
-      // hub
-      box(-7, 20, 14, 8, "#3a4152");
+      if (bw >= 0) w.fillRect(0, ty, Math.max(2, bw), thk);
+      else         w.fillRect(bw, ty, Math.max(2, -bw), thk);
+      w.fillStyle = "rgba(230,255,238,0.85)";
+      w.fillRect(-1, ty-2, 2, thk+4);          // the centre point itself
+
+      // badge on the bottom rim, and a light along the top edge
+      w.fillStyle = "#454d61"; w.fillRect(-7, hh - th + 2, 14, Math.max(3, th - 5));
+      w.fillStyle = "rgba(255,255,255,0.10)";
+      w.fillRect(-hw + tw*0.6, -hh + 1, (hw - tw*0.6)*2, 1);
       w.restore();
     };
     drawWheel();
@@ -2080,9 +2176,17 @@ resize();
 let last = performance.now();
 function frame(now){
   const dt = Math.min(0.05, (now - last)/1000); last = now;
-  update(dt);
-  if (state.mode === "play" || state.mode === "outro") render(); else { drawOverlayScreen(); }
-  present();
+  /* The rAF call used to sit after the work, so any throw inside a frame
+     killed the loop dead and froze the picture. Twice now that has cost a
+     playthrough: once an undefined palette stop, once a leaderboard method
+     that did not exist. The loop keeps going and complains once instead. */
+  try {
+    update(dt);
+    if (state.mode === "play" || state.mode === "outro") render(); else { drawOverlayScreen(); }
+    present();
+  } catch (err) {
+    if (!state.errLogged){ state.errLogged = true; console.error("[liebezeit] frame error", err); }
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
