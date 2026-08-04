@@ -160,7 +160,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.0.0</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.0.1</div>
       </div>
 
       <div class="bezel">
@@ -195,7 +195,7 @@
       <div class="hull-foot">
         <span class="foot-play">Arrows to steer &middot; up / down for the pedal</span>
         <span class="foot-play">Thread the traffic &middot; miss everything</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v1.0.0</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v1.0.1</span>
       </div>
     </div>
   </div>
@@ -229,7 +229,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.0.0 · 3 Aug";
+const VERSION      = "v1.0.1 · 3 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -377,10 +377,15 @@ function keyed(keys, x){
 /* No fog. A translucent white sheet over the road reads as a rendering
    fault, not as weather. The morning is cool light instead: a blue cast
    that burns off over the first eight bars. */
+/* The road empties as the light goes and fills again when the drums come
+   back at bar 69, so totality is quiet and the drop is a wall of cars. */
+const W_TRAFFIC = [[1,1.0],[50,1.0],[56,0.45],[61,0.14],[68,0.14],[70,1.25],[76,1.15],[96,1.0]];
 const W_CHILL   = [[1,0.55],[5,0.38],[9,0.12],[13,0.0],[96,0.0]];
 const W_DUST    = [[1,0.0],[15,0.0],[18,1.0],[24,1.0],[28,0.0],[96,0.0]];
 const W_CLOUD   = [[1,0.0],[23,0.0],[27,1.0],[33,1.0],[40,0.35],[47,0.0],[96,0.0]];
 const W_RAIN    = [[1,0.0],[27,0.0],[29,1.0],[33,1.0],[38,0.0],[96,0.0]];
+const SUN_H     = [[1,28],[12,40],[26,52],[40,62],[52,72],[61,80],[68,80],
+                   [74,68],[84,48],[93,32],[96,26]];
 const W_RAINBOW = [[1,0.0],[36,0.0],[39,1.0],[45,1.0],[49,0.0],[96,0.0]];
 
 /* Daylight as a smooth curve rather than a step per section, so the
@@ -452,6 +457,11 @@ const rnd   = (a,b)=> a + Math.random()*(b-a);
 function hex(c){
   return [parseInt(c.substr(1,2),16),parseInt(c.substr(3,2),16),parseInt(c.substr(5,2),16)];
 }
+function mixHexRaw(a,b,t){
+  const A=hex(a),B=hex(b);
+  const h2=n=>Math.round(n).toString(16).padStart(2,"0");
+  return "#"+h2(lerp(A[0],B[0],t))+h2(lerp(A[1],B[1],t))+h2(lerp(A[2],B[2],t));
+}
 function mixHex(a,b,t){
   const A=hex(a),B=hex(b);
   return "rgb("+Math.round(lerp(A[0],B[0],t))+","+Math.round(lerp(A[1],B[1],t))+","+
@@ -460,9 +470,17 @@ function mixHex(a,b,t){
 /* palette that crossfades over one bar when a section changes */
 function pal(key, idx){
   const a = state.prevSection, b = state.section, t = state.blend;
-  const av = idx===undefined ? a[key] : a[key][idx];
-  const bv = idx===undefined ? b[key] : b[key][idx];
+  const pick = (o,i) => i===undefined ? o[key] : o[key][Math.min(i, o[key].length-1)];
+  const av = pick(a, idx), bv = pick(b, idx);
   return t >= 1 ? bv : mixHex(av, bv, t);
+}
+
+/* Every sky is three stops. A section with two would be read at index 2
+   by the cross-fade while the other side had three, which returned
+   undefined, threw inside render, and killed the animation loop. That is
+   the bar 77 hang: the swell was the first section with a third colour. */
+for (const sec of SECTIONS){
+  if (sec.sky.length === 2) sec.sky = [sec.sky[0], mixHexRaw(sec.sky[0], sec.sky[1], 0.5), sec.sky[1]];
 }
 
 /* ============================================================
@@ -587,7 +605,7 @@ const state = {
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
   banner:0, bannerSec:null, cue:"", cueT:0, outroT:0,
-  light:0.5, eclipse:0, night:false, bolt:null, boltT:0, nextBolt:0, rain:0, chill:1, cloud:0, dust:0, rainbow:0, rainDrops:[],
+  light:0.5, eclipse:0, night:false, bolt:null, boltT:0, nextBolt:0, rain:0, chill:1, cloud:0, traffic_mul:1, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
   hitFlash:0, snareFlash:0, kickFlash:0, chain:0, chainT:0, pop:null, bestChain:0,
   crt:false, stars:[]
@@ -697,9 +715,9 @@ const CAR_HALF_W  = 0.155;          // matches the drawn sprite
 const CAR_HALF_Z  = SEGLEN * 0.9;
 
 function spawnTraffic(dt){
-  const want = state.night ? 5 : 7;
+  const want = Math.max(1, Math.round((state.night ? 5 : 7) * (state.traffic_mul || 1)));
   if (state.traffic.length >= want) return;
-  if (Math.random() > dt * 2.6) return;
+  if (Math.random() > dt * 2.6 * (state.traffic_mul || 1)) return;
 
   const z = state.position + PLAYER_Z + rnd(DRAW_DIST*0.55, DRAW_DIST*0.95)*SEGLEN;
   // which lanes are already taken anywhere near this stretch of road?
@@ -770,13 +788,14 @@ function update(dt){
     }
   }
   state.cueT = Math.max(0, state.cueT - dt);
-  state.blend = Math.min(1, state.blend + dt / (BAR*2));
+  state.blend = Math.min(1, state.blend + dt / (BAR*3.5));
   state.light = lightAt(barF + 1);
   const bf = barF + 1;
   state.eclipse = bf<49 ? 0 : bf<61 ? (bf-49)/12 : bf<68 ? 1 : bf<72 ? 1-(bf-68)/4 : 0;
   state.night = state.light < 0.32;
   state.rain    = keyed(W_RAIN, bf);
   state.chill   = keyed(W_CHILL, bf);
+  state.traffic_mul = keyed(W_TRAFFIC, bf);
   state.cloud   = keyed(W_CLOUD, bf);
   state.dust    = keyed(W_DUST, bf);
   state.rainbow = keyed(W_RAINBOW, bf);
@@ -987,14 +1006,11 @@ function drawSky(horizon){
   const h = Math.max(horizon, 1);
   /* A two-colour ramp goes muddy through the middle. Sections may carry a
      third, mid-sky colour and the ramp runs top -> mid -> horizon. */
-  const three = state.section.sky.length > 2 && state.prevSection.sky.length > 2;
   for (let i=0;i<SKY_BANDS;i++){
     const t0 = i/SKY_BANDS, t1 = (i+1)/SKY_BANDS;
     const u  = Math.pow(t0, 0.78);
-    ctx.fillStyle = three
-      ? (u < 0.5 ? mixHex(pal("sky",0), pal("sky",1), u*2)
-                 : mixHex(pal("sky",1), pal("sky",2), (u-0.5)*2))
-      : mixHex(pal("sky",0), pal("sky",state.section.sky.length-1), u);
+    ctx.fillStyle = u < 0.5 ? mixHex(pal("sky",0), pal("sky",1), u*2)
+                            : mixHex(pal("sky",1), pal("sky",2), (u-0.5)*2);
     ctx.fillRect(0, Math.floor(t0*h), VW, Math.ceil((t1-t0)*h)+1);
   }
   const w = state.section.weather;
@@ -1012,7 +1028,7 @@ function drawSky(horizon){
   /* The sun, with the moon crossing it. At full coverage it is the
      corona, which is why the middle of the track goes dark. */
   const cx = Math.round(VW/2 + state.playerX*-14);
-  const cy = Math.round(h-46), r = 24, e = state.eclipse;
+  const cy = Math.round(h - keyed(SUN_H, state.bar)), r = 24, e = state.eclipse;
   if (e >= 0.999){
     const cg = ctx.createRadialGradient(cx,cy,r*0.95, cx,cy,r*3.2);
     cg.addColorStop(0,"rgba(255,240,200,0.95)");
@@ -1033,16 +1049,39 @@ function drawSky(horizon){
     ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.stroke();
   }
 
-  if (state.cloud > 0.02){
-    for (let i=0;i<8;i++){
-      const y = Math.round(h - 30 - i*11);
-      const x = Math.round(((state.musicT*7 + i*67) % (VW+140)) - 70);
-      const ww = 70 - i*5;
-      ctx.fillStyle = mixHex("#ffffff", "#39445a", clamp(state.rain,0,1));
-      ctx.globalAlpha = state.cloud * (0.45 + 0.4*state.rain);
-      ctx.fillRect(x, y, ww, 6); ctx.fillRect(x+14, y-5, ww*0.55, 5);
-      ctx.globalAlpha = 1;
-    }
+  /* Cumulus with flat bottoms and hard edges, drifting at different rates.
+     A few are always there so the sky has depth even on a clear day; the
+     weather curve adds more and darkens them into nimbus when it rains. */
+  const nClouds = 3 + Math.round(state.cloud*5);
+  for (let i=0;i<nClouds;i++){
+    const seedY = 0.20 + ((i*0.173) % 0.52);
+    const y  = Math.round(h*seedY);
+    if (y > h-14) continue;
+    const sp = 5 + (i%3)*4;
+    const x  = Math.round(((state.musicT*sp + i*97) % (VW+180)) - 90);
+    const sz = 9 + (i%4)*4;
+    const base = i < 3 ? 0.40 : state.cloud;
+    ctx.globalAlpha = clamp(base * (0.75 + 0.25*state.rain), 0, 1);
+    const body = mixHex("#ffffff", "#3c4658", clamp(state.rain*0.9,0,1));
+    const shade2 = mixHex("#c8d4e4", "#2a3242", clamp(state.rain*0.9,0,1));
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.arc(x,          y,        sz*0.62, Math.PI, 0);
+    ctx.arc(x+sz*0.78,  y-sz*0.30, sz*0.80, Math.PI, 0);
+    ctx.arc(x+sz*1.70,  y,        sz*0.58, Math.PI, 0);
+    ctx.rect(x-sz*0.62, y, sz*2.90, sz*0.42);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = shade2;
+    ctx.fillRect(x-sz*0.62, y+sz*0.20, sz*2.90, sz*0.22);
+    ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(x,          y,        sz*0.62, Math.PI, 0);
+    ctx.arc(x+sz*0.78,  y-sz*0.30, sz*0.80, Math.PI, 0);
+    ctx.arc(x+sz*1.70,  y,        sz*0.58, Math.PI, 0);
+    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-sz*0.62, y+sz*0.42);
+    ctx.lineTo(x+sz*2.28, y+sz*0.42); ctx.stroke();
+    ctx.globalAlpha = 1;
   }
   if (state.rainbow > 0.02){
     const rx = VW/2, ry = h+46, cols=["#ff2a2a","#ff8a1e","#ffe81e","#3ad44e","#1e8aff","#a03aff"];
@@ -1472,7 +1511,7 @@ function weatherPass(horizon){
   if (e > 0.55){
     const t = clamp((e-0.55)/0.45, 0, 1);
     const cx = Math.round(VW/2 + state.playerX*-14);
-    const cy = Math.round(clamp(horizon,40,VH)-46);
+    const cy = Math.round(clamp(horizon,40,VH) - keyed(SUN_H, state.bar));
     const now = state.musicT;
 
     // 360-degree horizon glow: the warmth, low down, where it belongs
@@ -1556,19 +1595,18 @@ function drawHUD(){
   txt(Math.ceil(state.timeLeft).toString().padStart(2,"0"), 6, 14,
       state.timeLeft<10?"#ff5a3c":"#ffe066", 13);
 
-  txt("SCORE", VW/2-30, 5, "#ff6ad0", 8);
-  txt(Math.floor(state.score).toLocaleString("en-GB"), VW/2-30, 14, "#f4f0e4", 13);
+  // score, right aligned against the edge
+  txt("SCORE", VW-6, 5, "#ff6ad0", 8, "right");
+  txt(Math.floor(state.score).toLocaleString("en-GB"), VW-6, 14, "#f4f0e4", 13, "right");
 
-  // the chain, as rungs rather than a number
+  // the chain, as a row of rungs under the score
   const rungs = Math.min(state.chain, CHAIN_CAP+1);
   for (let i=0;i<CHAIN_CAP+1;i++){
     const on = i < rungs;
     ctx.fillStyle = on ? (i>=CHAIN_CAP ? "#ffe066" : "#7cff9a") : "rgba(255,255,255,.13)";
-    ctx.fillRect(VW-10-i*0, 22+ (CHAIN_CAP-i)*6, 6, 4);
+    ctx.fillRect(VW-6-(CHAIN_CAP-i)*8 - 6, 31, 6, 4);
   }
-  if (state.chain > CHAIN_CAP+1){
-    txt("x"+state.chain, VW-34, 22+(CHAIN_CAP+1)*6, "#ffe066", 9);
-  }
+  if (state.chain > CHAIN_CAP+1) txt("x"+state.chain, VW-6, 38, "#ffe066", 9, "right");
 
   const kph = Math.round(state.speed/BASE_SPEED * 300);
   txt(kph+" km/h", 6, VH-20, "#ffe066", 9);
@@ -1579,10 +1617,10 @@ function drawHUD(){
   }
 
   if (state.pop){
-    // well clear of the car, and rising as it fades
+    // sits just above the roof, out of the road
     const k = 1 - clamp(state.pop.t/0.9, 0, 1);
     ctx.globalAlpha = clamp(state.pop.t/0.35, 0, 1);
-    txt("+"+state.pop.v, VW/2, VH-118 - k*18, "#7cff9a", 13, "center");
+    txt("+"+state.pop.v, VW/2, VH-74 - k*10, "#7cff9a", 12, "center");
     ctx.globalAlpha = 1;
   }
 }
@@ -1624,8 +1662,8 @@ function drawNovaFront(cx, cy, sc){
   ctx.beginPath(); ctx.moveTo(cx-16*sc, cy-15*sc); ctx.lineTo(cx-2*sc, cy-22*sc); ctx.stroke();
   ctx.strokeStyle="#000"; ctx.lineWidth=Math.max(1.5, 2*sc);
 
-  // Mike, left-hand drive, black cap and blue eyes
-  const mx = -17;
+  // Mike, left-hand drive, so on the right as we look at the front
+  const mx = 6;
   ctx.fillStyle="#d8a97e"; ctx.fillRect(cx+mx*sc, cy-27*sc, 13*sc, 11*sc);
   ctx.fillStyle="#15151a"; ctx.fillRect(cx+(mx-1)*sc, cy-30*sc, 15*sc, 5*sc);
   ctx.fillRect(cx+(mx-4)*sc, cy-26*sc, 5*sc, 2*sc);          // peak
@@ -1635,8 +1673,8 @@ function drawNovaFront(cx, cy, sc){
   ctx.fillRect(cx+(mx+9)*sc, cy-22*sc, 1*sc, 1*sc);
   ctx.fillStyle="#9c7050"; ctx.fillRect(cx+(mx+4)*sc, cy-18*sc, 5*sc, 1*sc);
 
-  // Kalinka, riding
-  const kx = 6;
+  // Kalinka, riding, on the left as we look at it
+  const kx = -19;
   ctx.fillStyle="#e09a4a"; ctx.fillRect(cx+kx*sc, cy-26*sc, 13*sc, 11*sc);
   ctx.fillStyle="#c47a34";
   ctx.fillRect(cx+kx*sc, cy-31*sc, 4*sc, 6*sc);
@@ -1838,9 +1876,7 @@ addEventListener("mouseup",        e=>pointer(e,false));
 /* ---- high score board ---- */
 if (LEADERBOARD_ENABLED && window.Leaderboard){
   Leaderboard.init("liebezeit", {
-    screen: ".screen-viewport",
-    accent: "#7cff9a",
-    prize: false,
+    screen: ".screen-viewport", accent: "#7cff9a", prize: false,
     onReplay: function(){ Audio8.init(); Leaderboard.onGameStart(); startRun(); }
   });
 }
