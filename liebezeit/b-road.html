@@ -42,7 +42,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.0.1 · 3 Aug";
+const VERSION      = "v1.0.2 · 3 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -197,6 +197,10 @@ const W_CHILL   = [[1,0.55],[5,0.38],[9,0.12],[13,0.0],[96,0.0]];
 const W_DUST    = [[1,0.0],[15,0.0],[18,1.0],[24,1.0],[28,0.0],[96,0.0]];
 const W_CLOUD   = [[1,0.0],[23,0.0],[27,1.0],[33,1.0],[40,0.35],[47,0.0],[96,0.0]];
 const W_RAIN    = [[1,0.0],[27,0.0],[29,1.0],[33,1.0],[38,0.0],[96,0.0]];
+/* The city comes up out of the haze once the light returns, and grows
+   all the way to the line. You never arrive: the finish is on the
+   outskirts. */
+const CITY      = [[1,0],[70,0],[74,0.12],[80,0.32],[86,0.58],[92,0.82],[96,1.0]];
 const SUN_H     = [[1,28],[12,40],[26,52],[40,62],[52,72],[61,80],[68,80],
                    [74,68],[84,48],[93,32],[96,26]];
 const W_RAINBOW = [[1,0.0],[36,0.0],[39,1.0],[45,1.0],[49,0.0],[96,0.0]];
@@ -411,14 +415,14 @@ const state = {
   section:SECTIONS[0], prevSection:SECTIONS[0], blend:1,
   bar:1, musicT:0,
   position:0, playerX:0, speed:0, throttle:1,
-  lean:0, finishAt:0,
+  lean:0, finishAt:0, steerNow:0, timeAdd:0, timeAddV:0,
   segments:[], genCurve:0, genY:0, genBar:0,
   barStart:[], roadBarCursor:1,
   scenery:[], traffic:[], meteors:[], fxQueue:[],
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
   banner:0, bannerSec:null, cue:"", cueT:0, outroT:0,
-  light:0.5, eclipse:0, night:false, bolt:null, boltT:0, nextBolt:0, rain:0, chill:1, cloud:0, traffic_mul:1, dust:0, rainbow:0, rainDrops:[],
+  light:0.5, eclipse:0, night:false, bolt:null, boltT:0, nextBolt:0, rain:0, chill:1, cloud:0, traffic_mul:1, city:0, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
   hitFlash:0, snareFlash:0, kickFlash:0, chain:0, chainT:0, pop:null, bestChain:0,
   crt:false, stars:[]
@@ -596,7 +600,10 @@ function update(dt){
       state.blend = 0;
       // checkpoint: section boundaries top the clock up
       const secBars = sectionEndBar(sec) - sec.bar;
+      const was = state.timeLeft;
       state.timeLeft = Math.min(TIME_CAP, state.timeLeft + secBars * BAR + 6);
+      state.timeAddV = Math.round(state.timeLeft - was);
+      if (state.timeAddV > 0) state.timeAdd = 2.2;
       state.checkpointFlash = 0.9;
     }
   }
@@ -609,6 +616,7 @@ function update(dt){
   state.rain    = keyed(W_RAIN, bf);
   state.chill   = keyed(W_CHILL, bf);
   state.traffic_mul = keyed(W_TRAFFIC, bf);
+  state.city = keyed(CITY, bf);
   state.cloud   = keyed(W_CLOUD, bf);
   state.dust    = keyed(W_DUST, bf);
   state.rainbow = keyed(W_RAINBOW, bf);
@@ -652,7 +660,10 @@ function update(dt){
   ensureRoad();
 
   const speedPct = state.speed / BASE_SPEED;
-  const steer = (input.left?-1:0)+(input.right?1:0);
+  /* A touch wheel gives a continuous axis; keys give -1/0/+1. Whichever
+     is being used wins. */
+  const steer = input.axis !== 0 ? input.axis : ((input.left?-1:0)+(input.right?1:0));
+  state.steerNow = steer;
   state.playerX += steer * STEER_RATE * dt * clamp(speedPct, 0.6, 1.0);
   state.playerX -= pSeg.curve * dz * CENTRIFUGAL;
   state.playerX = clamp(state.playerX, -3.2, 3.2);
@@ -725,6 +736,7 @@ function update(dt){
   state.checkpointFlash = Math.max(0, state.checkpointFlash - dt*1.4);
   state.shake      = Math.max(0, state.shake - dt*4);
   state.chainT = Math.max(0, state.chainT - dt);
+  state.timeAdd = Math.max(0, state.timeAdd - dt);
   if (state.chainT <= 0 && state.chain){ state.bestChain=Math.max(state.bestChain,state.chain); state.chain = 0; }
   if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
   state.banner     = Math.max(0, state.banner - dt);
@@ -765,7 +777,7 @@ function startRun(){
   state.section = SECTIONS[0]; state.prevSection = SECTIONS[0]; state.blend = 1;
   state.bar=1; state.musicT=0; state.position=0; state.playerX=0;
   state.speed=BASE_SPEED*0.4; state.throttle=0.94;
-  state.lean=0; state.finishAt=0; state.outroT=0;
+  state.lean=0; state.finishAt=0; state.outroT=0; state.timeAdd=0; state.city=0;
   state.segments.length=0; state.genCurve=0; state.genY=0; state.genBar=0;
   state.barStart.length=0; state.roadBarCursor=1;
   state.scenery.length=0; state.traffic.length=0; state.meteors.length=0;
@@ -909,6 +921,44 @@ function drawSky(horizon){
   ctx.fillRect(0, Math.max(0, horizon-4), VW, 5); ctx.globalAlpha = 1;
 }
 
+/* A blocky skyline, deterministic so it does not shimmer, drawn between
+   the mountains and the road. */
+function drawCity(horizon, parallax){
+  const c = state.city;
+  if (c < 0.02) return;
+  const base = Math.max(0, horizon);
+  const drift = (parallax*0.03) % 1000;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, VW, base+1); ctx.clip();
+  const near = mixHex(pal("mtn"), "#161a2c", 0.55);
+  const far  = mixHex(pal("haze"), "#2a3048", 0.62);
+  for (let layer=0; layer<2; layer++){
+    const depth = layer ? 1 : 0.62;
+    const col   = layer ? near : far;
+    const px    = drift * (layer?1:0.55);
+    for (let i=-2;i<26;i++){
+      const seed = Math.sin((i+layer*37)*12.9898)*43758.5453;
+      const r    = seed - Math.floor(seed);
+      const w    = 7 + Math.floor(r*11);
+      const x    = Math.round(i*17 - (px % 17) + (layer?5:0));
+      if (x > VW+12 || x < -14) continue;
+      const h    = Math.round((6 + r*30) * c * depth);
+      if (h < 2) continue;
+      ctx.fillStyle = col;
+      ctx.fillRect(x, base-h, w, h);
+      ctx.strokeStyle = "rgba(0,0,0,0.5)"; ctx.lineWidth = 1;
+      ctx.strokeRect(x+0.5, base-h+0.5, w-1, h);
+      if (layer && h > 9 && c > 0.35){
+        ctx.fillStyle = "rgba(255,226,140,"+(0.55*clamp((c-0.35)/0.5,0,1)).toFixed(2)+")";
+        for (let wy=base-h+3; wy<base-3; wy+=5)
+          for (let wx=x+2; wx<x+w-2; wx+=4)
+            if ((wx*7+wy*13) % 5 < 3) ctx.fillRect(wx, wy, 2, 2);
+      }
+    }
+  }
+  ctx.restore();
+}
+
 function drawMountains(horizon, parallax){
   const pts = [];
   for (let x=-20; x<=VW+20; x+=4){
@@ -1034,16 +1084,19 @@ function drawFinishLine(segs, baseIdx, horizon){
   ctx.fillStyle = "#e8e2d0";
   ctx.fillRect(sx - sw - pw, sy - ph, pw*2, ph);
   ctx.fillRect(sx + sw - pw, sy - ph, pw*2, ph);
-  const bh = Math.max(3, u(0.26));
+  const bh = Math.max(4, u(0.40));
   ctx.fillStyle = "#f4f0e0";
   ctx.fillRect(sx - sw - pw, sy - ph, sw*2 + pw*2, bh);
   ctx.strokeStyle = "#000"; ctx.lineWidth = Math.max(1, u(0.02));
   ctx.strokeRect(sx - sw - pw, sy - ph, sw*2 + pw*2, bh);
-  if (bh > 7){
-    ctx.fillStyle = "#c4241a";
-    ctx.font = "bold "+Math.round(bh*0.62)+"px ui-monospace, Menlo, monospace";
+  if (bh > 11){
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("FINISH", sx, sy - ph + bh*0.55);
+    ctx.fillStyle = "#c4241a";
+    ctx.font = "bold "+Math.round(bh*0.42)+"px ui-monospace, Menlo, monospace";
+    ctx.fillText("FINISH", sx, sy - ph + bh*0.32);
+    ctx.fillStyle = "#20242c";
+    ctx.font = "bold "+Math.round(bh*0.22)+"px ui-monospace, Menlo, monospace";
+    ctx.fillText("WELCOME TO LAGUNA SECA", sx, sy - ph + bh*0.70);
   }
   // Kalinka, at the verge, tail going
   const kx = sx + u(1.5), ky = sy, kw = Math.max(2, u(0.16));
@@ -1185,6 +1238,7 @@ function render(){
   ctx.beginPath(); ctx.rect(0,0,VW,Math.max(0,horizon)); ctx.clip();
   drawSky(horizon);
   drawMountains(horizon, state.position*0.01 + state.playerX*-40);
+  drawCity(horizon, state.position*0.01 + state.playerX*-40);
   ctx.restore();
 
   // now the road itself
@@ -1402,6 +1456,14 @@ function drawHUD(){
   txt("TIME",  6, 5, "#ff8a3c", 8);
   txt(Math.ceil(state.timeLeft).toString().padStart(2,"0"), 6, 14,
       state.timeLeft<10?"#ff5a3c":"#ffe066", 13);
+
+  if (state.timeAdd > 0){
+    const k = 1 - clamp(state.timeAdd/2.2, 0, 1);
+    ctx.globalAlpha = clamp(state.timeAdd/0.5, 0, 1);
+    txt("+"+state.timeAddV+"s", 6, 30 - k*6, "#7cff9a", 11);
+    txt("TIME ADDED", 6, 42 - k*6, "#7cff9a", 7);
+    ctx.globalAlpha = 1;
+  }
 
   // score, right aligned against the edge
   txt("SCORE", VW-6, 5, "#ff6ad0", 8, "right");
@@ -1628,7 +1690,7 @@ function present(){
 /* ============================================================
    INPUT
    ============================================================ */
-const input = { left:false, right:false, up:false, down:false };
+const input = { left:false, right:false, up:false, down:false, axis:0 };
 const keymap = {
   ArrowLeft:"left", a:"left", A:"left",
   ArrowRight:"right", d:"right", D:"right",
