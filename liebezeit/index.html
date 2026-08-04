@@ -105,28 +105,18 @@
     .pad-gas   { background: #2fbf52; color: #04240e; flex: 1.4; }
     .pad-brake { background: #e0342c; color: #fff;    flex: 1; }
 
-    /* A single wide wheel. Tap either end for full lock, or hold and slide
-       a thumb across it for fine steering. One target instead of two, so
-       there is nothing to miss between them. */
-    .wheel { display: none; position: relative; align-items: center; justify-content: space-between;
-      margin: 12px 4px 8px; height: 62px; padding: 0 14px; border-radius: 31px;
-      background: linear-gradient(180deg,#2a3352,#141a2e);
-      box-shadow: 0 6px 16px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.16),
-                  inset 0 -3px 8px rgba(0,0,0,0.5);
-      touch-action: none; -webkit-user-select: none; user-select: none; overflow: hidden; }
-    .wheel-arrow { font-size: 20px; color: rgba(255,255,255,0.62); pointer-events: none; z-index: 2; }
-    .wheel-track { position: absolute; left: 46px; right: 46px; top: 50%; height: 6px;
-      margin-top: -3px; border-radius: 3px; background: rgba(0,0,0,0.42);
-      box-shadow: inset 0 1px 2px rgba(0,0,0,0.6); pointer-events: none; }
-    .wheel-knob { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px;
-      margin: -22px 0 0 -22px; border-radius: 50%; pointer-events: none;
-      background: radial-gradient(circle at 38% 32%, #fdfdfd, #cfd4de 62%, #98a0b0);
-      box-shadow: 0 3px 8px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.22);
-      transition: background 120ms ease; }
-    .wheel-knob::after { content: ""; position: absolute; left: 50%; top: 50%;
-      width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #e0342c; }
-    .wheel.on { background: linear-gradient(180deg,#33405f,#182038); }
-    @media (pointer: coarse) { .wheel { display: flex; } }
+    /* Controls in one row: wheel on the left half, pedals on the right,
+       all the same height so nothing is off on its own. */
+    .controls { display: none; gap: 10px; margin: 12px 4px 8px; height: 74px; }
+    .wheel-wrap { flex: 1; position: relative; border-radius: 14px; overflow: hidden;
+      background: linear-gradient(180deg,#222a44,#10152a);
+      box-shadow: 0 5px 14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.12);
+      touch-action: none; -webkit-user-select: none; user-select: none; }
+    .wheel-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%;
+      image-rendering: pixelated; image-rendering: crisp-edges; pointer-events: none; }
+    .controls .pads { flex: 1; display: flex; gap: 8px; margin: 0; }
+    .controls .pad { border-radius: 14px; padding: 0; font-size: 12px; }
+    @media (pointer: coarse) { .controls { display: flex; } }
     .pad:active { transform: translateY(1px); filter: brightness(0.92); }
     @media (pointer: coarse) { .pads { display: flex; } }
 
@@ -183,7 +173,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.0.2</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.0.3</div>
       </div>
 
       <div class="bezel">
@@ -192,15 +182,14 @@
         </div>
       </div>
 
-      <div class="wheel" id="wheel" aria-label="Steering">
-        <span class="wheel-arrow left">&#9664;</span>
-        <span class="wheel-track"></span>
-        <span class="wheel-knob" id="knob"></span>
-        <span class="wheel-arrow right">&#9654;</span>
-      </div>
-      <div class="pads">
-        <button class="pad pad-brake" aria-label="Brake">Brake</button>
-        <button class="pad pad-gas" aria-label="Accelerate">Gas</button>
+      <div class="controls">
+        <div class="wheel-wrap" id="wheel">
+          <canvas id="wheelCv"></canvas>
+        </div>
+        <div class="pads">
+          <button class="pad pad-brake" aria-label="Brake">Brake</button>
+          <button class="pad pad-gas" aria-label="Accelerate">Gas</button>
+        </div>
       </div>
 
       <div class="switches">
@@ -220,9 +209,9 @@
       <div id="newsletter-error" class="newsletter-feedback">Please enter a valid email address.</div>
 
       <div class="hull-foot">
-        <span class="foot-play">Arrows to steer &middot; up / down for the pedal &middot; slide the wheel on touch</span>
+        <span class="foot-play">Arrows to steer &middot; up and down for the pedal</span>
         <span class="foot-play">Thread the traffic &middot; miss everything</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v1.0.2</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v1.0.3</span>
       </div>
     </div>
   </div>
@@ -1960,39 +1949,108 @@ addEventListener("mouseup",        e=>pointer(e,false));
     el.addEventListener("mouseleave",off);};
   bind(".pad-gas","up"); bind(".pad-brake","down");
 
-  /* The wheel. Thumb position across it maps straight to the steering
-     axis, with a small dead zone in the middle, so a tap near an end is
-     full lock and a slide is analogue. One target, nothing to miss. */
-  const wheel = document.querySelector("#wheel"), knob = document.querySelector("#knob");
-  if (wheel){
-    let active = false;
-    const set = clientX => {
+  /* The wheel.
+
+     Two things were wrong before. It read touches[0], which is the first
+     finger on the PAGE, so holding the gas hijacked the steering. It now
+     tracks the identifier of the touch that actually started on the wheel
+     and ignores every other finger. And it was a full-width slider, which
+     is why it read as one; it is half the width and drawn as a wheel that
+     turns with your input. */
+  const wheel = document.querySelector("#wheel");
+  const wcv   = document.querySelector("#wheelCv");
+  if (wheel && wcv){
+    const WW = 132, WH = 74;
+    wcv.width = WW; wcv.height = WH;
+    const w = wcv.getContext("2d");
+    let touchId = null;
+
+    const setFrom = clientX => {
       const r = wheel.getBoundingClientRect();
-      const half = (r.width - 28) / 2;
+      const half = (r.width - 22) / 2;
       let v = ((clientX - r.left) - r.width/2) / half;
       v = Math.max(-1, Math.min(1, v));
-      const dead = 0.09;
-      const out2 = Math.abs(v) < dead ? 0 : Math.sign(v) * ((Math.abs(v)-dead)/(1-dead));
-      input.axis = out2;
-      knob.style.left = (50 + out2*40) + "%";
+      const dead = 0.10;
+      input.axis = Math.abs(v) < dead ? 0 : Math.sign(v)*((Math.abs(v)-dead)/(1-dead));
     };
-    const release = () => { active = false; input.axis = 0;
-      knob.style.left = "50%"; wheel.classList.remove("on"); };
-    const grab = e => {
+    const release = () => { touchId = null; input.axis = 0; };
+    const findTouch = e => {
+      if (touchId === null) return null;
+      for (const t of e.changedTouches) if (t.identifier === touchId) return t;
+      for (const t of e.touches)        if (t.identifier === touchId) return t;
+      return null;
+    };
+
+    wheel.addEventListener("touchstart", e => {
       e.preventDefault();
       if (state.mode !== "play"){ advance(); return; }
-      active = true; wheel.classList.add("on");
-      set((e.touches ? e.touches[0] : e).clientX);
+      if (touchId !== null) return;                 // already steering
+      const t = e.changedTouches[0];
+      touchId = t.identifier; setFrom(t.clientX);
+    }, {passive:false});
+    wheel.addEventListener("touchmove", e => {
+      const t = findTouch(e); if (!t) return;
+      e.preventDefault(); setFrom(t.clientX);
+    }, {passive:false});
+    const endTouch = e => {
+      if (touchId === null) return;
+      for (const t of e.changedTouches) if (t.identifier === touchId){ e.preventDefault(); release(); return; }
     };
-    const move = e => { if (!active) return; e.preventDefault();
-      set((e.touches ? e.touches[0] : e).clientX); };
-    wheel.addEventListener("touchstart", grab, {passive:false});
-    wheel.addEventListener("touchmove",  move, {passive:false});
-    wheel.addEventListener("touchend",   e => { e.preventDefault(); release(); }, {passive:false});
-    wheel.addEventListener("touchcancel",e => { e.preventDefault(); release(); }, {passive:false});
-    wheel.addEventListener("mousedown", grab);
-    addEventListener("mousemove", move);
-    addEventListener("mouseup", release);
+    wheel.addEventListener("touchend", endTouch, {passive:false});
+    wheel.addEventListener("touchcancel", endTouch, {passive:false});
+
+    wheel.addEventListener("mousedown", e => {
+      e.preventDefault();
+      if (state.mode !== "play"){ advance(); return; }
+      touchId = "mouse"; setFrom(e.clientX);
+    });
+    addEventListener("mousemove", e => { if (touchId === "mouse") setFrom(e.clientX); });
+    addEventListener("mouseup",   () => { if (touchId === "mouse") release(); });
+
+    /* An F1 wheel in the game's own idiom: flat top and bottom, chunky
+       grips, rev lights across the top, a little display in the middle.
+       The whole thing turns with your steering. */
+    const box = (x,y,ww,hh,fill,stroke) => {
+      w.fillStyle = fill; w.fillRect(x,y,ww,hh);
+      if (stroke !== false){ w.strokeStyle = "#000"; w.lineWidth = 2; w.strokeRect(x,y,ww,hh); }
+    };
+    const drawWheel = () => {
+      const a = input.axis;
+      w.clearRect(0,0,WW,WH);
+      w.save();
+      w.translate(WW/2, WH/2 + 1);
+      w.rotate(a * 0.30);
+      // rim: flat top and bottom, grips either side
+      box(-52,-26, 104, 14, "#2c313f");                 // top bar
+      box(-52, -4,  22, 30, "#2c313f");                 // left grip
+      box( 30, -4,  22, 30, "#2c313f");                 // right grip
+      box(-52, -12, 104, 10, "#232838");                // shoulder
+      // grip texture
+      w.fillStyle = "#1a1e2a";
+      for (let i=0;i<4;i++){ w.fillRect(-48, 2+i*6, 14, 3); w.fillRect(34, 2+i*6, 14, 3); }
+      // rev lights
+      const lit = Math.round(Math.abs(a)*9);
+      for (let i=0;i<9;i++){
+        const on = i < lit;
+        w.fillStyle = on ? (i<4 ? "#2fbf52" : i<7 ? "#ffc21e" : "#e0342c") : "#12151f";
+        w.fillRect(-42 + i*10, -23, 7, 8);
+      }
+      // centre display
+      box(-26, -1, 52, 22, "#0c1410");
+      w.fillStyle = "#123020"; w.fillRect(-23, 2, 46, 16);
+      // steering readout inside it
+      w.fillStyle = "#7cff9a";
+      const bx = Math.round(a * 20);
+      w.fillRect(-2 + bx, 5, 4, 10);
+      w.fillStyle = "rgba(124,255,154,0.28)";
+      w.fillRect(-1, 9, 2, 2);
+      for (let i=-4;i<=4;i++) w.fillRect(i*5-0.5, 17, 1, 2);
+      // hub
+      box(-7, 20, 14, 8, "#3a4152");
+      w.restore();
+    };
+    drawWheel();
+    (function loop(){ drawWheel(); requestAnimationFrame(loop); })();
   }
 })();
 
