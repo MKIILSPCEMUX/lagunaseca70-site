@@ -42,7 +42,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.0.4 · 4 Aug";
+const VERSION      = "v1.1.0 · 9 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -187,6 +187,28 @@ function keyed(keys, x){
   const t=(b[0]===a[0])?0:clamp((x-a[0])/(b[0]-a[0]),0,1);
   return lerp(a[1], b[1], t*t*(3-2*t));
 }
+
+/* A fork of lightning: one main channel down from the top of the sky,
+   throwing branches off it. The last element of a segment is 2 for the
+   main channel and 1 for a branch, so the main one can be drawn heavier. */
+function makeBolt(){
+  const seg = [], bottom = VH*0.37;
+  let x = rnd(VW*0.20, VW*0.80), y = 0;
+  while (y < bottom){
+    const ny = y + rnd(9, 17), nx = x + rnd(-13, 13);
+    seg.push([x,y,nx,ny,2]);
+    if (Math.random() < 0.45){
+      let fx = nx, fy = ny;
+      const n = 3 + (Math.random()*4|0);
+      for (let k=0;k<n;k++){
+        const gx = fx + rnd(-18,18), gy = fy + rnd(8,16);
+        seg.push([fx,fy,gx,gy,1]); fx = gx; fy = gy;
+      }
+    }
+    x = nx; y = ny;
+  }
+  return seg;
+}
 /* No fog. A translucent white sheet over the road reads as a rendering
    fault, not as weather. The morning is cool light instead: a blue cast
    that burns off over the first eight bars. */
@@ -207,6 +229,20 @@ const CITY      = [[1,0],[70,0],[74,0.12],[80,0.32],[86,0.58],[92,0.82],[96,1.0]
 const SUN_H     = [[1,28],[12,40],[26,52],[40,62],[52,72],[61,80],[68,80],
                    [74,68],[84,48],[93,32],[96,26]];
 const W_RAINBOW = [[1,0.0],[36,0.0],[39,1.0],[45,1.0],[49,0.0],[96,0.0]];
+
+/* The moon's transit, in units of the sun's radius. This used to be read
+   off the coverage figure, which is symmetric, so the moon backed out the
+   way it came in. Coverage still drives the darkness; this drives the
+   moon, and it only goes one way: in from the left, sits over the sun for
+   the dark bars, then out to the right. */
+const MOON_X    = [[1,-3.4],[49,-2.6],[61,0],[68,0],[72,2.6],[96,3.4]];
+
+/* The three fork strikes, placed on the synth lasers rather than thrown
+   at random. Written as bar.beat.sixteenth, all counted from one, so
+   28.3.2 is bar 28, third beat, second sixteenth. */
+const BOLTS   = [[28,3,2],[29,1,3],[31,1,3]];
+const BOLT_T  = BOLTS.map(([bar,beat,six]) =>
+                  (bar-1)*BAR + ((beat-1)*4 + (six-1))*TICK);
 
 /* Daylight as a smooth curve rather than a step per section, so the
    eclipse creeps in over twelve bars instead of switching on. */
@@ -425,7 +461,8 @@ const state = {
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
   banner:0, bannerSec:null, cue:"", cueT:0, outroT:0,
-  light:0.5, eclipse:0, night:false, bolt:null, boltT:0, nextBolt:0, rain:0, chill:1, cloud:0, traffic_mul:1, city:0, dust:0, rainbow:0, rainDrops:[],
+  light:0.5, eclipse:0, moonX:-3.4, night:false,
+  bolt:null, boltT:0, boltIx:0, nextBolt:0, flashT:0, rain:0, chill:1, cloud:0, traffic_mul:1, city:0, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
   hitFlash:0, snareFlash:0, kickFlash:0, chain:0, chainT:0, pop:null, bestChain:0,
   crt:false, stars:[]
@@ -615,6 +652,7 @@ function update(dt){
   state.light = lightAt(barF + 1);
   const bf = barF + 1;
   state.eclipse = bf<49 ? 0 : bf<61 ? (bf-49)/12 : bf<68 ? 1 : bf<72 ? 1-(bf-68)/4 : 0;
+  state.moonX   = keyed(MOON_X, bf);
   state.night = state.light < 0.32;
   state.rain    = keyed(W_RAIN, bf);
   state.chill   = keyed(W_CHILL, bf);
@@ -624,30 +662,22 @@ function update(dt){
   state.dust    = keyed(W_DUST, bf);
   state.rainbow = keyed(W_RAINBOW, bf);
 
-  /* Lightning, only while it is actually raining. Struck on a downbeat so
-     it lands with the track rather than at random. */
+  /* Lightning. Three fork strikes, landing on the synth lasers at 28.3.2,
+     29.1.3 and 31.1.3. A while loop rather than an if, so a dropped frame
+     can't swallow one. Between the strikes the sky flickers on its own,
+     with no fork, so the storm still breathes without stealing the hits. */
+  while (state.boltIx < BOLT_T.length && state.musicT >= BOLT_T[state.boltIx]){
+    state.bolt = makeBolt(); state.boltT = 0.54; state.boltIx++;
+  }
+  if (state.boltT > 0) state.boltT = Math.max(0, state.boltT - dt);
+
   if (state.rain > 0.45){
     if (state.musicT > state.nextBolt){
-      state.nextBolt = state.musicT + rnd(2.4, 5.2);
-      const seg = [];
-      let x = rnd(VW*0.15, VW*0.85), y = 0;
-      const bottom = VH*0.34;
-      while (y < bottom){
-        const ny = y + rnd(8, 18), nx = x + rnd(-14, 14);
-        seg.push([x,y,nx,ny]);
-        if (Math.random() < 0.30){                       // a fork
-          let fx = nx, fy = ny;
-          for (let k=0;k<3;k++){
-            const gx = fx + rnd(-16,16), gy = fy + rnd(7,15);
-            seg.push([fx,fy,gx,gy]); fx = gx; fy = gy;
-          }
-        }
-        x = nx; y = ny;
-      }
-      state.bolt = seg; state.boltT = 0.42;
+      state.nextBolt = state.musicT + rnd(1.7, 3.6);
+      state.flashT = 0.18;
     }
-  } else { state.bolt = null; state.nextBolt = state.musicT + 1.5; }
-  if (state.boltT > 0) state.boltT = Math.max(0, state.boltT - dt);
+  } else { state.nextBolt = state.musicT + 1.2; }
+  state.flashT = Math.max(0, state.flashT - dt);
 
 
   /* --- speed, then steering -------------------------------- */
@@ -665,7 +695,9 @@ function update(dt){
   const speedPct = state.speed / BASE_SPEED;
   /* A touch wheel gives a continuous axis; keys give -1/0/+1. Whichever
      is being used wins. */
-  const steer = input.axis !== 0 ? input.axis : ((input.left?-1:0)+(input.right?1:0));
+  /* Straight digital steering. The analogue wheel is gone, so there is no
+     second source arguing with this one. */
+  const steer = (input.left?-1:0)+(input.right?1:0);
   state.steerNow = steer;
   state.playerX += steer * STEER_RATE * dt * clamp(speedPct, 0.6, 1.0);
   state.playerX -= pSeg.curve * dz * CENTRIFUGAL;
@@ -784,6 +816,7 @@ function startRun(){
   state.segments.length=0; state.genCurve=0; state.genY=0; state.genBar=0;
   state.barStart.length=0; state.roadBarCursor=1;
   state.scenery.length=0; state.traffic.length=0; state.meteors.length=0;
+  state.bolt=null; state.boltT=0; state.boltIx=0; state.nextBolt=0; state.flashT=0;
   state.fxQueue.length=0; state.nextTick=0; state.lastTick=-1; state.timeLeft=34; state.score=0; state.chain=0; state.chainT=0; state.bestChain=0; state.pop=null;
   state.crashT=0; state.shake=0; state.banner=0;
   ensureRoad();
@@ -865,8 +898,18 @@ function drawSky(horizon){
     ctx.fillStyle="#ffe066"; ctx.beginPath(); ctx.arc(cx,cy,r-5,0,7); ctx.fill();
     ctx.fillStyle="#fff6c8"; ctx.beginPath(); ctx.arc(cx,cy,r-11,0,7); ctx.fill();
     if (e > 0.001){                                    // the bite
+      /* Driven by the transit, not by the coverage, so the moon carries on
+         across and leaves to the right instead of reversing out. The rake
+         flattens as it covers, so the crossover into totality is seamless.
+         Clipped to the sun, because a new moon is invisible against the sky
+         and should not go sailing off as a grey disc once it is clear. */
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.clip();
       ctx.fillStyle=pal("sky",1);
-      ctx.beginPath(); ctx.arc(cx - r*2 + e*r*2.6, cy - r*0.35, r*1.02, 0, 7); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + state.moonX*r, cy - r*0.35*(1-e), r*1.02, 0, 7);
+      ctx.fill();
+      ctx.restore();
     }
     ctx.strokeStyle="#000"; ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.stroke();
@@ -1342,18 +1385,29 @@ function weatherPass(horizon){
     ctx.globalCompositeOperation = "source-over";
   }
 
-  /* the strike: a white flash, then the bolt itself for a few frames */
+  /* the sky flickering between strikes: no fork, just the room lighting up */
+  if (state.flashT > 0){
+    ctx.fillStyle = "rgba(206,224,255,"+((state.flashT/0.18)*0.17).toFixed(3)+")";
+    ctx.fillRect(0,0,VW,VH);
+  }
+
+  /* the strike itself: a white flash, the fork, a beat of dark, one more
+     flicker of the fork as it dies */
   if (state.bolt && state.boltT > 0){
     const b = state.boltT;
-    if (b > 0.30){
-      ctx.fillStyle = "rgba(226,238,255,"+(((b-0.30)/0.12)*0.62).toFixed(3)+")";
+    if (b > 0.40){
+      ctx.fillStyle = "rgba(230,240,255,"+(((b-0.40)/0.14)*0.70).toFixed(3)+")";
       ctx.fillRect(0,0,VW,VH);
     }
-    if (b > 0.24 || (b > 0.10 && b < 0.16)){
-      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.beginPath();
-      for (const [x0,y0,x1,y1] of state.bolt){ ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); }
+    if (b > 0.30 || (b > 0.13 && b < 0.20)){
+      ctx.strokeStyle = "rgba(176,212,255,0.50)"; ctx.lineWidth = 6;
+      ctx.beginPath();
+      for (const s of state.bolt) if (s[4] === 2){ ctx.moveTo(s[0],s[1]); ctx.lineTo(s[2],s[3]); }
       ctx.stroke();
-      ctx.strokeStyle = "rgba(180,214,255,0.55)"; ctx.lineWidth = 5; ctx.stroke();
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (const s of state.bolt){ ctx.moveTo(s[0],s[1]); ctx.lineTo(s[2],s[3]); }
+      ctx.stroke();
     }
   }
 
@@ -1432,11 +1486,16 @@ function weatherPass(horizon){
       ctx.fillStyle="#07030e"; ctx.beginPath(); ctx.arc(cx,cy,22,0,7); ctx.fill();
       ctx.strokeStyle="rgba(255,250,235,"+(0.95*f).toFixed(2)+")"; ctx.lineWidth=2;
       ctx.beginPath(); ctx.arc(cx,cy,23,0,7); ctx.stroke();
-      // Baily's beads on the way in and the way out
+      /* Baily's beads: the last light going in, the first light coming
+         out. The moon crosses left to right, so they sit on the right
+         edge before totality and the left edge after it. The old test
+         was against eclipse < 1, which is never false, so they always
+         came out on the same side. */
       if (f < 0.75){
         const bead = 1-f;
+        const side = state.moonX < 0 ? 0 : Math.PI;
         for (let i=0;i<5;i++){
-          const a0 = -0.5 + i*0.25 + (state.eclipse<1?0:Math.PI);
+          const a0 = -0.5 + i*0.25 + side;
           ctx.fillStyle="rgba(255,255,240,"+(bead*0.9).toFixed(2)+")";
           ctx.fillRect(cx+Math.cos(a0)*23-1, cy+Math.sin(a0)*23-1, 3, 3);
         }
@@ -1693,7 +1752,7 @@ function present(){
 /* ============================================================
    INPUT
    ============================================================ */
-const input = { left:false, right:false, up:false, down:false, axis:0 };
+const input = { left:false, right:false, up:false, down:false };
 const keymap = {
   ArrowLeft:"left", a:"left", A:"left",
   ArrowRight:"right", d:"right", D:"right",
