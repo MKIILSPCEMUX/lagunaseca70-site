@@ -19,11 +19,14 @@
   <meta name="twitter:description" content="Music by Laguna Seca. Drive Liebezeit, a beat-locked road game at 85 BPM." />
   <meta name="twitter:image" content="https://lagunaseca70.com/social-preview.jpg" />
 
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC&display=swap" rel="stylesheet" />
-
   <style>
+    /* LagunaPump: a fat rounded display face cut for this cabinet, after
+       Pump Std Demi (Letraset, 1970), which is the lettering on Tago Mago.
+       Pump is monoline, so it is built as letter skeletons fattened into
+       round-capped tubes. 4KB, same file the game canvas uses. */
+    @font-face{font-family:"LagunaPump";font-style:normal;font-weight:400;
+      font-display:block;src:url("/liebezeit/lagunapump.woff2") format("woff2");}
+
     /* Cabinet 3, repainted after Tago Mago: a burnt orange wash, red
        lettering, cream and black, and the spirals scribbled over the hull.
        Nothing here is chrome. The panel edges are uneven on purpose and the
@@ -37,6 +40,7 @@
       --tm-cream:   #fdf3df;
       --tm-ink:     #14100c;
       --tm-green:   #3f9c35;
+      --pump: "LagunaPump", "Arial Black", Impact, sans-serif;
       --spirals:    url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22300%22%20viewBox%3D%220%200%20300%20300%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23100c08%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M64%2059Q65%2059%2064%2060Q63%2061%2063%2062Q61%2062%2059%2063Q59%2061%2058%2062Q56%2060%2055%2057Q55%2055%2055%2053Q56%2051%2058%2050Q61%2049%2064%2049Q67%2048%2070%2051Q72%2053%2073%2055Q74%2058%2075%2062Q73%2065%2071%2069Q67%2071%2064%2073Q60%2073%2054%2072Q51%2069%2047%2066Q46%2063%2044%2057Q44%2051%2047%2047Q50%2043%2054%2040Q60%2038%2065%2038Q71%2039%2078%2043Q81%2048%2084%2053Q86%2060%2084%2067Q81%2072%2077%2077Q71%2081%2063%2084Q56%2084%2049%2081Q44%2077%2038%2072Q34%2064%2034%2057Q34%2047%2039%2041%22%20stroke-width%3D%223.4%22%2F%3E%3Cpath%20d%3D%22M168%2046Q168%2046%20168%2048Q169%2047%20170%2047Q172%2046%20172%2045Q172%2043%20173%2042Q173%2040%20172%2038Q169%2037%20168%2036Q166%2036%20164%2036Q161%2039%20161%2040Q159%2042%20157%2044Q157%2049%20160%2052Q161%2054%20164%2056Q167%2057%20170%2057Q175%2056%20178%2054Q181%2051%20182%2047Q184%2043%20182%2039Q181%2034%20178%2030Q174%2028%20168%2027Q164%2027%20159%2028Q155%2031%20151%2036Q148%2041%20147%2046Q149%2051%20152%2057Q156%2062%20160%2064%22%20stroke-width%3D%222.6%22%2F%3E%3Cpath%20d%3D%22M246%20109Q245%20108%20246%20108Q245%20108%20244%20106Q245%20104%20247%20104Q248%20102%20249%20102Q250%20102%20253%20104Q255%20105%20255%20105Q256%20108%20256%20111Q256%20113%20254%20116Q253%20117%20249%20118Q247%20118%20243%20119Q239%20117%20236%20114Q235%20111%20235%20107Q234%20103%20236%20100Q239%2097%20242%2094Q246%2092%20251%2091Q255%2093%20260%2095Q263%2098%20266%20103Q267%20109%20266%20114Q265%20119%20262%20124Q256%20127%20251%20130Q244%20130%20239%20129Q233%20125%20228%20120Q225%20115%20224%20108Q224%20101%20228%2094Q232%2089%20238%2084Q246%2081%20252%2081Q260%2084%20267%2087Q273%2093%20277%20100Q277%20109%20276%20117Q273%20126%20268%20132Q261%20137%20252%20139Q242%20140%20233%20138Q226%20133%20219%20126%22%20stroke-width%3D%223.8%22%2F%3E%3Cpath%20d%3D%22M95%20156Q95%20157%2093%20157Q93%20158%2092%20158Q92%20160%2093%20161Q94%20163%2095%20164Q97%20164%2099%20164Q101%20164%20103%20163Q104%20161%20104%20159Q106%20157%20105%20153Q103%20151%20102%20148Q99%20146%2094%20146Q92%20146%2088%20148Q84%20151%2082%20153Q81%20157%2081%20162Q82%20166%2085%20169Q88%20173%2093%20175Q99%20176%20104%20174Q108%20173%20112%20168Q114%20165%20116%20159Q116%20152%20113%20147Q110%20141%20106%20138Q100%20135%2093%20136Q85%20136%2081%20141Q76%20144%2072%20152Q71%20159%2071%20165%22%20stroke-width%3D%223.0%22%2F%3E%3Cpath%20d%3D%22M197%20197Q197%20198%20196%20198Q195%20199%20195%20200Q194%20199%20191%20199Q191%20198%20190%20196Q190%20194%20191%20191Q192%20191%20193%20189Q196%20187%20197%20187Q201%20187%20204%20190Q206%20192%20207%20194Q207%20197%20208%20201Q205%20204%20204%20207Q201%20208%20197%20210Q193%20210%20189%20208Q185%20206%20182%20203Q179%20198%20180%20194Q180%20190%20183%20184Q186%20181%20191%20178Q197%20177%20202%20178Q208%20178%20212%20183Q215%20187%20217%20193Q218%20199%20216%20206Q213%20212%20209%20216Q203%20220%20196%20220Q188%20220%20181%20218Q175%20212%20171%20206Q169%20198%20170%20191Q171%20183%20175%20176Q182%20171%20189%20168Q197%20165%20206%20167Q214%20171%20221%20178%22%20stroke-width%3D%223.6%22%2F%3E%3Cpath%20d%3D%22M43%20246Q41%20246%2042%20244Q43%20243%2043%20243Q44%20242%2046%20242Q47%20241%2048%20242Q49%20243%2050%20245Q51%20247%2050%20249Q50%20251%2049%20253Q47%20255%2044%20254Q41%20256%2039%20254Q36%20252%2035%20250Q33%20248%2033%20244Q33%20242%2035%20238Q37%20234%2040%20233Q44%20232%2048%20232Q51%20234%2056%20237Q58%20240%2059%20244Q60%20249%2058%20253Q57%20258%2054%20260Q49%20263%2044%20264Q39%20265%2033%20262Q29%20259%2025%20254Q23%20249%2023%20242%22%20stroke-width%3D%222.4%22%2F%3E%3Cpath%20d%3D%22M273%20256Q272%20255%20272%20255Q270%20255%20268%20255Q269%20257%20267%20257Q267%20259%20267%20260Q268%20262%20269%20264Q271%20265%20273%20265Q274%20265%20277%20265Q278%20263%20280%20261Q281%20258%20281%20256Q281%20253%20280%20250Q277%20249%20275%20246Q270%20246%20267%20247Q265%20248%20261%20250Q259%20254%20257%20257Q258%20263%20259%20266Q261%20270%20266%20272Q269%20275%20275%20275Q279%20273%20285%20271Q287%20268%20290%20263%22%20stroke-width%3D%222.2%22%2F%3E%3Cpath%20d%3D%22M131%20270Q131%20270%20130%20270Q129%20268%20128%20268Q129%20266%20129%20264Q130%20264%20131%20262Q132%20262%20134%20263Q136%20262%20137%20264Q140%20265%20139%20268Q140%20271%20139%20272Q138%20275%20136%20277Q134%20278%20130%20278Q127%20279%20124%20277Q122%20274%20119%20272Q120%20267%20119%20265Q121%20260%20122%20257Q127%20254%20131%20253Q135%20253%20140%20253Q143%20256%20147%20260Q149%20264%20149%20269Q149%20274%20148%20279Q144%20284%20138%20287Q132%20289%20126%20288Q122%20287%20116%20282Q113%20277%20110%20272Q110%20265%20111%20258Q114%20253%20119%20247Q126%20244%20132%20243%22%20stroke-width%3D%222.8%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
       --grain:      url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27120%27%20height%3D%27120%27%3E%3Cfilter%20id%3D%27n%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.9%27%20numOctaves%3D%273%27%20stitchTiles%3D%27stitch%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27120%27%20height%3D%27120%27%20filter%3D%27url%28%23n%29%27%2F%3E%3C%2Fsvg%3E");
     }
@@ -111,17 +115,18 @@
     .screw.tl { top: 13px; left: 13px; } .screw.tr { top: 13px; right: 13px; }
     .screw.bl { bottom: 15px; left: 13px; } .screw.br { bottom: 15px; right: 13px; }
 
-    /* The wordmark is drawn, not set. A webfont would have been one network
-       request away from falling back to Arial Black, and brush strokes with
-       round caps get closer to hand-painted lettering than any clean face
-       would anyway. */
-    .hull-head { display: flex; flex-direction: column; align-items: center; padding: 2px 6px 14px; }
-    .wordmark { width: 100%; max-width: 330px; display: block; transform: rotate(-1.2deg); }
-    .wordmark-svg { width: 100%; height: auto; display: block; overflow: visible; }
-    .wm-shadow { stroke: rgba(20,16,12,0.45); }
-    .wm-face   { stroke: var(--tm-red); }
-    .hull-caption { margin-top: 12px; font-size: 9px; letter-spacing: 0.24em;
-      text-transform: uppercase; font-weight: 800; color: rgba(28,14,6,0.72); text-align: center; }
+    .hull-head { display: flex; flex-direction: column; align-items: center; padding: 6px 6px 14px; }
+    .wordmark {
+      font-family: var(--pump);
+      font-size: clamp(26px, 8.6vw, 40px);
+      line-height: 1; letter-spacing: 0.01em;
+      text-transform: uppercase; color: var(--tm-red);
+      transform: rotate(-1.2deg);
+      text-shadow: 3px 4px 0 rgba(20,16,12,0.42);
+    }
+    .hull-caption { margin-top: 13px; font-family: var(--pump); font-size: 8px;
+      letter-spacing: 0.03em; text-transform: uppercase; color: rgba(28,14,6,0.74);
+      text-align: center; white-space: nowrap; }
 
     .bezel { background: linear-gradient(168deg, #241a12, #0c0806); border-radius: 12px 9px 14px 10px;
       padding: 11px; border: 3px solid var(--tm-ink);
@@ -141,7 +146,7 @@
     .pad {
       flex: 1; height: 68px; padding: 0;
       border: 3px solid var(--tm-ink); border-radius: 11px 8px 12px 9px;
-      font-family: "Bowlby One SC", "Arial Black", Impact, sans-serif;
+      font-family: var(--pump);
       font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
       cursor: pointer; touch-action: none;
       display: flex; align-items: center; justify-content: center;
@@ -149,7 +154,10 @@
       filter: brightness(0.74) saturate(0.85);
       transition: filter 60ms linear, box-shadow 60ms linear, transform 60ms linear;
     }
-    .pad-left, .pad-right { background: var(--tm-cream); color: var(--tm-ink); font-size: 22px; }
+    /* the arrows are not in LagunaPump, and a fallback glyph at the pump
+       size came out small: give them their own face and size */
+    .pad-left, .pad-right { background: var(--tm-cream); color: var(--tm-ink);
+      font-family: system-ui, -apple-system, "Segoe UI Symbol", sans-serif; font-size: 27px; }
     .pad-brake { background: var(--tm-red);   color: var(--tm-cream); }
     .pad-gas   { background: var(--tm-green); color: var(--tm-cream); }
 
@@ -163,11 +171,11 @@
 
     /* ---- the two switches out to the other cabinets ---- */
     .switches { display: flex; gap: 10px; margin: 14px 2px 8px; }
-    .switch { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+    .switch { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 7px;
       padding: 11px 8px; border: 3px solid var(--tm-ink); border-radius: 22px 20px 24px 21px;
       cursor: pointer; text-decoration: none;
-      font-family: "Bowlby One SC", "Arial Black", Impact, sans-serif;
-      font-size: 11px; letter-spacing: 0.02em; text-transform: uppercase;
+      font-family: var(--pump);
+      font-size: 10px; letter-spacing: 0; text-transform: uppercase; white-space: nowrap;
       box-shadow: 0 3px 0 rgba(20,16,12,0.5);
       transition: transform 110ms ease, filter 110ms ease; }
     .switch.amber { background: var(--tm-cream); color: var(--tm-red); }
@@ -178,12 +186,12 @@
     .switch.rose .led { background: var(--tm-cream); }
 
     .ds-signup { display: flex; gap: 8px; justify-content: center; margin: 4px 6px 6px; }
-    .ds-signup input { flex: 1; max-width: 190px; height: 34px; padding: 5px 12px;
+    .ds-signup input { flex: 1; max-width: 190px; height: 34px; padding: 5px 14px;
       border-radius: 17px 15px 18px 16px; border: 3px solid var(--tm-ink);
       background: var(--tm-cream); color: var(--tm-ink); font-size: 12px; font-weight: 700; }
     .ds-signup button { height: 34px; padding: 5px 16px; border-radius: 17px 15px 18px 16px;
       border: 3px solid var(--tm-ink); background: var(--tm-red); color: var(--tm-cream);
-      font-family: "Bowlby One SC", "Arial Black", Impact, sans-serif;
+      font-family: var(--pump);
       letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px;
       cursor: pointer; box-shadow: 0 3px 0 rgba(20,16,12,0.5); }
     .ds-signup button:hover { filter: brightness(1.06); }
@@ -198,9 +206,10 @@
     .hull-foot { display: flex; flex-direction: column; align-items: center; gap: 3px;
       text-align: center; text-transform: uppercase; font-weight: 800;
       padding: 10px 4px 2px; white-space: nowrap; }
-    .foot-play { font-size: 9px; letter-spacing: 0.10em; color: rgba(253,243,223,0.86);
-      text-shadow: 0 1px 0 rgba(20,16,12,0.35); }
-    .foot-meta { font-size: 8px; letter-spacing: 0.10em; color: rgba(253,243,223,0.60); margin-top: 2px; }
+    .foot-play { font-family: var(--pump); font-size: 8px; letter-spacing: 0.02em;
+      color: rgba(253,243,223,0.88); text-shadow: 0 1px 0 rgba(20,16,12,0.35); }
+    .foot-meta { font-family: var(--pump); font-size: 7px; letter-spacing: 0.02em;
+      color: rgba(253,243,223,0.62); margin-top: 3px; }
     .hull-foot a { color: #ffd08a; text-decoration: none; border-bottom: 1px solid rgba(255,208,138,0.4); }
     @media (max-width: 400px){ .foot-play { font-size: 8px; letter-spacing: 0.06em; }
       .foot-meta { font-size: 7px; letter-spacing: 0.05em; } }
@@ -208,8 +217,12 @@
     @media (max-width: 480px) {
       .wrap { padding: 10px 6px 18px; }
       .cabinet { padding: 16px 12px 12px; }
-      .wordmark { max-width: 260px; }
-      .pad { height: 62px; }
+      .pad { height: 62px; font-size: 11px; }
+      .pad-left, .pad-right { font-size: 24px; }
+      .hull-caption { font-size: 7px; }
+      /* the face is wide: the switch labels need the room back */
+      .switch { font-size: 9px; padding: 11px 5px; gap: 5px; }
+      .led { width: 6px; height: 6px; }
     }
   </style>
 </head>
@@ -222,8 +235,8 @@
       <span class="screw bl"></span><span class="screw br"></span>
 
       <div class="hull-head">
-        <div class="wordmark"><svg class="wordmark-svg" viewBox="0 -19.0 862 138" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Liebezeit"><g fill="none" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"><g class="wm-shadow" transform="translate(4,5)"><g transform="rotate(1.75 40.0 50.0) translate(0 -2.1)"><path d="M14.9 -0.4 L12.8 101.2 L63.3 101.0"/></g><g transform="rotate(0.9 118.0 50.0) translate(0 -0.2)"><path d="M118.2 0.4 L118.4 99.6"/></g><g transform="rotate(0.77 195.0 50.0) translate(0 1.1)"><path d="M219.8 -1.2 L170.1 -0.3 L170.0 101.4 L219.3 100.9 M170.6 50.8 L208.6 48.3"/></g><g transform="rotate(-1.31 310.0 50.0) translate(0 -2.5)"><path d="M271.7 -1.4 L270.2 99.0 M271.3 2.1 C347.0 -0.7 351.3 54.5 274.6 50.0 M270.4 49.7 C355.4 42.7 356.3 106.7 274.3 101.3"/></g><g transform="rotate(0.48 425.0 50.0) translate(0 2.3)"><path d="M447.6 0.1 L399.4 -0.4 L400.0 101.4 L448.7 99.7 M401.5 48.6 L440.3 47.9"/></g><g transform="rotate(0.9 530.0 50.0) translate(0 2.3)"><path d="M500.5 0.2 L558.4 -0.2 L500.2 100.7 L561.7 98.7"/></g><g transform="rotate(-0.43 635.0 50.0) translate(0 2.4)"><path d="M658.1 0.4 L609.4 0.5 L610.6 100.3 L659.9 98.6 M610.5 51.2 L650.3 48.8"/></g><g transform="rotate(-0.29 712.0 50.0) translate(0 -1.4)"><path d="M712.3 -1.6 L715.0 99.4"/></g><g transform="rotate(1.35 794.0 50.0) translate(0 -0.0)"><path d="M764.8 -0.6 L821.6 1.4 M792.7 1.0 L790.4 101.0"/></g></g><g class="wm-face"><g transform="rotate(1.75 40.0 50.0) translate(0 -2.1)"><path d="M14.9 -0.4 L12.8 101.2 L63.3 101.0"/></g><g transform="rotate(0.9 118.0 50.0) translate(0 -0.2)"><path d="M118.2 0.4 L118.4 99.6"/></g><g transform="rotate(0.77 195.0 50.0) translate(0 1.1)"><path d="M219.8 -1.2 L170.1 -0.3 L170.0 101.4 L219.3 100.9 M170.6 50.8 L208.6 48.3"/></g><g transform="rotate(-1.31 310.0 50.0) translate(0 -2.5)"><path d="M271.7 -1.4 L270.2 99.0 M271.3 2.1 C347.0 -0.7 351.3 54.5 274.6 50.0 M270.4 49.7 C355.4 42.7 356.3 106.7 274.3 101.3"/></g><g transform="rotate(0.48 425.0 50.0) translate(0 2.3)"><path d="M447.6 0.1 L399.4 -0.4 L400.0 101.4 L448.7 99.7 M401.5 48.6 L440.3 47.9"/></g><g transform="rotate(0.9 530.0 50.0) translate(0 2.3)"><path d="M500.5 0.2 L558.4 -0.2 L500.2 100.7 L561.7 98.7"/></g><g transform="rotate(-0.43 635.0 50.0) translate(0 2.4)"><path d="M658.1 0.4 L609.4 0.5 L610.6 100.3 L659.9 98.6 M610.5 51.2 L650.3 48.8"/></g><g transform="rotate(-0.29 712.0 50.0) translate(0 -1.4)"><path d="M712.3 -1.6 L715.0 99.4"/></g><g transform="rotate(1.35 794.0 50.0) translate(0 -0.0)"><path d="M764.8 -0.6 L821.6 1.4 M792.7 1.0 L790.4 101.0"/></g></g></g></svg></div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.1.0</div>
+        <div class="wordmark">Liebezeit</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.2.0</div>
       </div>
 
       <div class="bezel">
@@ -256,9 +269,9 @@
       <div id="newsletter-error" class="newsletter-feedback">Please enter a valid email address.</div>
 
       <div class="hull-foot">
-        <span class="foot-play">Arrows to steer &middot; up and down for the pedal</span>
-        <span class="foot-play">Thread the traffic &middot; miss everything</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">buy me a coffee</a> &middot; v1.1.0</span>
+        <span class="foot-play">Arrows steer &middot; up down throttle</span>
+        <span class="foot-play">Thread the traffic</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.2.0</span>
       </div>
     </div>
   </div>
@@ -290,7 +303,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.1.0 · 9 Aug";
+const VERSION      = "v1.2.0 · 9 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -1765,8 +1778,11 @@ function weatherPass(horizon){
 }
 
 /* ---- HUD ------------------------------------------------------- */
+const FACE_MONO    = "bold %px ui-monospace, Menlo, monospace";
+const FACE_DISPLAY = '%px "LagunaPump", "Arial Black", Impact, sans-serif';
+let   TXT_FACE     = FACE_MONO;
 function txt(s, x, y, col, size, align, shadow){
-  ctx.font = "bold "+(size||8)+"px ui-monospace, Menlo, monospace";
+  ctx.font = TXT_FACE.replace("%", (size||8));
   ctx.textAlign = align||"left"; ctx.textBaseline="top";
   if (shadow !== false){ ctx.fillStyle="rgba(0,0,0,.75)"; ctx.fillText(s, x+1, y+1); }
   ctx.fillStyle = col; ctx.fillText(s, x, y);
@@ -1902,6 +1918,7 @@ function drawNovaFront(cx, cy, sc){
 }
 
 function drawOverlayScreen(){
+  TXT_FACE = FACE_DISPLAY;
   ctx.fillStyle="#0a0810"; ctx.fillRect(0,0,VW,VH);
   const t = performance.now()/1000;
   for (const s of state.stars){
@@ -1910,17 +1927,18 @@ function drawOverlayScreen(){
   }
   if (state.mode==="title"){
     txt("LIEBEZEIT", VW/2, 26, "#ff6ad0", 21, "center");
-    txt("THREAD THE TRAFFIC", VW/2, 54, "#ffc46a", 9, "center");
+    txt("THREAD THE TRAFFIC", VW/2, 58, "#ffc46a", 10, "center");
     drawNovaFront(VW/2, 176, 1.35);
-    if ((t%1)<0.6) txt("PRESS SPACE OR TAP", VW/2, 244, "#f4f0e4", 10, "center");
-    txt("EACH CLEAN PASS PAYS MORE", VW/2, VH-40, "#6a6458", 8, "center");
-    txt(VERSION, VW/2, VH-24, "#8a8478", 8, "center");
+    if ((t%1)<0.6) txt("PRESS SPACE OR TAP", VW/2, 244, "#f4f0e4", 11, "center");
+    txt("EACH CLEAN PASS PAYS MORE", VW/2, VH-42, "#6a6458", 7, "center");
+    txt(VERSION, VW/2, VH-25, "#8a8478", 8, "center");
   } else {
-    txt(state.mode==="over" ? "TIME UP" : "FINISH", VW/2, 60, "#ffe066", 26, "center");
-    txt("BEST CHAIN x"+state.bestChain, VW/2, 94, "#ff6ad0", 9, "center");
-    txt("SCORE "+Math.floor(state.score).toLocaleString("en-GB"), VW/2, 112, "#f4f0e4", 12, "center");
-    if ((t%1)<0.6) txt("SPACE / TAP TO GO AGAIN", VW/2, 148, "#7ad0ff", 9, "center");
+    txt(state.mode==="over" ? "TIME UP" : "FINISH", VW/2, 58, "#ffe066", 24, "center");
+    txt("BEST CHAIN x"+state.bestChain, VW/2, 96, "#ff6ad0", 10, "center");
+    txt("SCORE "+Math.floor(state.score).toLocaleString("en-GB"), VW/2, 116, "#f4f0e4", 13, "center");
+    if ((t%1)<0.6) txt("SPACE / TAP TO GO AGAIN", VW/2, 152, "#7ad0ff", 10, "center");
   }
+  TXT_FACE = FACE_MONO;
 }
 
 /* ---- CRT / VHS post pass ---------------------------------------
@@ -2113,6 +2131,10 @@ function resize(){
 addEventListener("resize", resize);
 new ResizeObserver(resize).observe(document.querySelector(".screen-viewport"));
 resize();
+
+/* Pull the face in before the first title frame, so the wordmark does not
+   flash up in Arial Black and then swap. */
+if (document.fonts && document.fonts.load) document.fonts.load('24px "LagunaPump"').catch(()=>{});
 
 let last = performance.now();
 function frame(now){

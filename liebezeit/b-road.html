@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>LIEBEZEIT · B · the road</title>
 <style>
+  /* LagunaPump: a fat rounded display face built to sit next to the Tago
+     Mago lettering. Pump is monoline, so it is drawn as skeletons fattened
+     into round-capped tubes. 4KB, used by the cabinet chrome and by the
+     game's own title and end screens. */
+  @font-face{font-family:"LagunaPump";font-style:normal;font-weight:400;
+    font-display:block;src:url("/liebezeit/lagunapump.woff2") format("woff2");}
   html,body{margin:0;padding:0;height:100%;background:#0a0a0c;overflow:hidden;
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#cfc9b8;
     -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
@@ -42,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.1.0 · 9 Aug";
+const VERSION      = "v1.2.0 · 9 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -1508,8 +1514,11 @@ function weatherPass(horizon){
 }
 
 /* ---- HUD ------------------------------------------------------- */
+const FACE_MONO    = "bold %px ui-monospace, Menlo, monospace";
+const FACE_DISPLAY = '%px "LagunaPump", "Arial Black", Impact, sans-serif';
+let   TXT_FACE     = FACE_MONO;
 function txt(s, x, y, col, size, align, shadow){
-  ctx.font = "bold "+(size||8)+"px ui-monospace, Menlo, monospace";
+  ctx.font = TXT_FACE.replace("%", (size||8));
   ctx.textAlign = align||"left"; ctx.textBaseline="top";
   if (shadow !== false){ ctx.fillStyle="rgba(0,0,0,.75)"; ctx.fillText(s, x+1, y+1); }
   ctx.fillStyle = col; ctx.fillText(s, x, y);
@@ -1645,6 +1654,7 @@ function drawNovaFront(cx, cy, sc){
 }
 
 function drawOverlayScreen(){
+  TXT_FACE = FACE_DISPLAY;
   ctx.fillStyle="#0a0810"; ctx.fillRect(0,0,VW,VH);
   const t = performance.now()/1000;
   for (const s of state.stars){
@@ -1653,17 +1663,18 @@ function drawOverlayScreen(){
   }
   if (state.mode==="title"){
     txt("LIEBEZEIT", VW/2, 26, "#ff6ad0", 21, "center");
-    txt("THREAD THE TRAFFIC", VW/2, 54, "#ffc46a", 9, "center");
+    txt("THREAD THE TRAFFIC", VW/2, 58, "#ffc46a", 10, "center");
     drawNovaFront(VW/2, 176, 1.35);
-    if ((t%1)<0.6) txt("PRESS SPACE OR TAP", VW/2, 244, "#f4f0e4", 10, "center");
-    txt("EACH CLEAN PASS PAYS MORE", VW/2, VH-40, "#6a6458", 8, "center");
-    txt(VERSION, VW/2, VH-24, "#8a8478", 8, "center");
+    if ((t%1)<0.6) txt("PRESS SPACE OR TAP", VW/2, 244, "#f4f0e4", 11, "center");
+    txt("EACH CLEAN PASS PAYS MORE", VW/2, VH-42, "#6a6458", 7, "center");
+    txt(VERSION, VW/2, VH-25, "#8a8478", 8, "center");
   } else {
-    txt(state.mode==="over" ? "TIME UP" : "FINISH", VW/2, 60, "#ffe066", 26, "center");
-    txt("BEST CHAIN x"+state.bestChain, VW/2, 94, "#ff6ad0", 9, "center");
-    txt("SCORE "+Math.floor(state.score).toLocaleString("en-GB"), VW/2, 112, "#f4f0e4", 12, "center");
-    if ((t%1)<0.6) txt("SPACE / TAP TO GO AGAIN", VW/2, 148, "#7ad0ff", 9, "center");
+    txt(state.mode==="over" ? "TIME UP" : "FINISH", VW/2, 58, "#ffe066", 24, "center");
+    txt("BEST CHAIN x"+state.bestChain, VW/2, 96, "#ff6ad0", 10, "center");
+    txt("SCORE "+Math.floor(state.score).toLocaleString("en-GB"), VW/2, 116, "#f4f0e4", 13, "center");
+    if ((t%1)<0.6) txt("SPACE / TAP TO GO AGAIN", VW/2, 152, "#7ad0ff", 10, "center");
   }
+  TXT_FACE = FACE_MONO;
 }
 
 /* ---- CRT / VHS post pass ---------------------------------------
@@ -1802,6 +1813,10 @@ function resize(){
   out.style.height = out.height + "px";
 }
 addEventListener("resize", resize); resize();
+
+/* Pull the face in before the first title frame, so the wordmark does not
+   flash up in Arial Black and then swap. */
+if (document.fonts && document.fonts.load) document.fonts.load('24px "LagunaPump"').catch(()=>{});
 
 let last = performance.now();
 function frame(now){
