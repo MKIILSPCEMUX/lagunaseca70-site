@@ -48,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.2.0 · 9 Aug";
+const VERSION      = "v1.3.0 · 9 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -97,7 +97,19 @@ const CENTRIFUGAL  = 0.0000265;
    CHAIN_SCALE and everything follows. */
 const CHAIN_ROOT  = 415.30;                 // G#4
 const CHAIN_SCALE = [0,2,3,5,7,9,10,12];    // G# Dorian: G# A# B C# D# E# F# G#
-const CHAIN_CAP   = CHAIN_SCALE.length - 1; // the octave
+const CHAIN_CAP   = CHAIN_SCALE.length - 1;
+
+/* The chain reads as heat: pale yellow at the start, through amber and
+   orange, into a deep red once you are a long way in. Used on the score pop
+   above the car and on the rungs under the score, so the two are obviously
+   the same number. */
+const CHAIN_HEAT = ["#fff8d4","#ffec9a","#ffd45c","#ffb033","#ff8a24",
+                    "#f4611b","#e5400f","#cf2a0c","#b81d09","#a01406"];
+function chainColour(n){
+  if (n <= 0) return CHAIN_HEAT[0];
+  const t = clamp((n - 1) / 15, 0, 1);
+  return CHAIN_HEAT[Math.round(t * (CHAIN_HEAT.length - 1))];
+} // the octave
 
 /* ---------- internal resolution (OutRun's own) ------------------ */
 const VW = 224, VH = 320;   // portrait, matching Dark Star and Sneca
@@ -380,6 +392,14 @@ const Audio8 = {
   },
   stop(){ this.running = false; try { this.el.pause(); } catch(e){} },
 
+  /* Pause holds the track and the whole scheduler. The music clock is read
+     from the element, so freezing the element freezes the game's sense of
+     time, which is the only thing that matters here. */
+  hold(){ try { this.el.pause(); } catch(e){}
+          if (this.ctx && this.ctx.state === "running") this.ctx.suspend(); },
+  letGo(){ if (this.ctx) this.ctx.resume();
+           try { const p = this.el.play(); if (p) p.catch(()=>{}); } catch(e){} },
+
   /* Smoothed music clock. HTMLAudio.currentTime updates in coarse steps and
      jitters, so we free-run and slew towards it rather than trusting it
      frame to frame. Big jumps (a seek, a stall) snap. */
@@ -467,6 +487,7 @@ const state = {
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
   banner:0, bannerSec:null, cue:"", cueT:0, outroT:0,
+  paused:false,
   light:0.5, eclipse:0, moonX:-3.4, night:false,
   bolt:null, boltT:0, boltIx:0, nextBolt:0, flashT:0, rain:0, chill:1, cloud:0, traffic_mul:1, city:0, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
@@ -521,7 +542,14 @@ const segAt = z => state.segments[clamp(Math.floor(z/SEGLEN), 0, state.segments.
 /* ============================================================
    SCENERY — spawned on eighth notes, arrives on the beat
    ============================================================ */
-const OBJ_TYPES = ["tree","tree","tree","rock","sign","post","block"];
+/* "block" was a tower block drawn at roadside scale, which put four-storey
+   buildings the size of a fir tree along the verge. Gone; the city on the
+   horizon does that job properly. */
+const OBJ_TYPES = ["tree","tree","tree","rock","sign","post"];
+/* offset 1.0 is exactly the edge of the tarmac, and an object is about 0.155
+   wide, so anything under about 1.2 is standing on the kerb. Start on the
+   grass. */
+const VERGE = 1.34;
 const SCENERY_LOOKAHEAD = 14;   // ticks of travel time = 2.47 s at 100%
 const LANES = [-0.62, 0, 0.62];
 
@@ -552,7 +580,7 @@ function spawnScenery(){
       const type = down && Math.random() < 0.35 ? "sign"
                  : OBJ_TYPES[(Math.random()*OBJ_TYPES.length)|0];
       state.scenery.push({
-        arrive, side, offset: side * rnd(1.02, 2.25), type,
+        arrive, side, offset: side * rnd(VERGE, VERGE + 1.35), type,
         scale: down ? rnd(1.15,1.7) : rnd(0.75,1.2),
         tint: (Math.random()*3)|0, z:0
       });
@@ -602,6 +630,9 @@ function spawnTraffic(dt){
    UPDATE
    ============================================================ */
 function update(dt){
+  /* Paused means paused: no clock, no timer, no spawns. Everything downstream
+     reads state.musicT, so holding the audio holds the world. */
+  if (state.paused) return;
   Audio8.tick(dt);
   Audio8.pump();
 
@@ -794,7 +825,7 @@ function addLink(base){
   Audio8.note(step, state.chain > CHAIN_CAP+1);
   const gain = Math.round(base * Math.min(state.chain, 30));
   state.score += gain;
-  state.pop = { t:0.9, v:gain };
+  state.pop = { t:0.9, v:gain, col: chainColour(state.chain) };
 }
 
 function crash(mag){
@@ -814,7 +845,7 @@ function finish(){
 }
 
 function startRun(){
-  state.mode="play";
+  state.mode="play"; state.paused=false;
   state.section = SECTIONS[0]; state.prevSection = SECTIONS[0]; state.blend = 1;
   state.bar=1; state.musicT=0; state.position=0; state.playerX=0;
   state.speed=BASE_SPEED*0.4; state.throttle=0.94;
@@ -1069,12 +1100,6 @@ function drawObj(o, x, y, sc, clipY){
     const h = w*1.85;
     box(x-w*0.18, y-h, w*0.36, h, "#ffffff");
     ctx.fillStyle = "#e0342c"; ctx.fillRect(x-w*0.18, y-h, w*0.36, Math.max(1,h*0.26));
-  } else if (o.type === "block"){
-    const h = w*2.3;
-    box(x-w, y-h, w*2, h, c);
-    ctx.fillStyle = "#ffe066";
-    for (let r=0;r<3;r++) for (let cc=0;cc<2;cc++)
-      ctx.fillRect(x-w*0.62+cc*w*0.72, y-h+w*0.38+r*w*0.62, Math.max(1,w*0.32), Math.max(1,w*0.32));
   } else if (o.type === "dog"){
     const h = w*1.5;
     box(x-w*0.9,  y-h*0.75, w*1.8,  h*0.45, "#e09a4a");
@@ -1528,11 +1553,13 @@ function drawHUD(){
   txt(Math.ceil(state.timeLeft).toString().padStart(2,"0"), 6, 14,
       state.timeLeft<10?"#ff5a3c":"#ffe066", 13);
 
+  /* TIME ADDED sits centred in the sky. It used to hang off the left edge
+     under the clock, where it covered the road on a left-hand bend. */
   if (state.timeAdd > 0){
     const k = 1 - clamp(state.timeAdd/2.2, 0, 1);
     ctx.globalAlpha = clamp(state.timeAdd/0.5, 0, 1);
-    txt("+"+state.timeAddV+"s", 6, 30 - k*6, "#7cff9a", 11);
-    txt("TIME ADDED", 6, 42 - k*6, "#7cff9a", 7);
+    txt("+"+state.timeAddV+"s",  VW/2, 50 - k*7, "#7cff9a", 14, "center");
+    txt("TIME ADDED",            VW/2, 68 - k*7, "#7cff9a",  7, "center");
     ctx.globalAlpha = 1;
   }
 
@@ -1540,14 +1567,13 @@ function drawHUD(){
   txt("SCORE", VW-6, 5, "#ff6ad0", 8, "right");
   txt(Math.floor(state.score).toLocaleString("en-GB"), VW-6, 14, "#f4f0e4", 13, "right");
 
-  // the chain, as a row of rungs under the score
+  // the chain, as a row of rungs under the score, each rung its own heat
   const rungs = Math.min(state.chain, CHAIN_CAP+1);
   for (let i=0;i<CHAIN_CAP+1;i++){
-    const on = i < rungs;
-    ctx.fillStyle = on ? (i>=CHAIN_CAP ? "#ffe066" : "#7cff9a") : "rgba(255,255,255,.13)";
+    ctx.fillStyle = i < rungs ? chainColour(i+1) : "rgba(255,255,255,.13)";
     ctx.fillRect(VW-6-(CHAIN_CAP-i)*8 - 6, 31, 6, 4);
   }
-  if (state.chain > CHAIN_CAP+1) txt("x"+state.chain, VW-6, 38, "#ffe066", 9, "right");
+  if (state.chain > 1) txt("x"+state.chain, VW-6, 38, chainColour(state.chain), 9, "right");
 
   const kph = Math.round(state.speed/BASE_SPEED * 300);
   txt(kph+" km/h", 6, VH-20, "#ffe066", 9);
@@ -1558,10 +1584,10 @@ function drawHUD(){
   }
 
   if (state.pop){
-    // sits just above the roof, out of the road
+    // sits just above the roof, out of the road, in the chain's own colour
     const k = 1 - clamp(state.pop.t/0.9, 0, 1);
     ctx.globalAlpha = clamp(state.pop.t/0.35, 0, 1);
-    txt("+"+state.pop.v, VW/2, VH-74 - k*10, "#7cff9a", 12, "center");
+    txt("+"+state.pop.v, VW/2, VH-72 - k*10, state.pop.col || "#fff8d4", 10, "center");
     ctx.globalAlpha = 1;
   }
 }
@@ -1677,6 +1703,16 @@ function drawOverlayScreen(){
   TXT_FACE = FACE_MONO;
 }
 
+/* The pause card: the frame you were on, dimmed, with the word over it. */
+function drawPaused(){
+  ctx.fillStyle = "rgba(6,4,12,0.62)"; ctx.fillRect(0,0,VW,VH);
+  TXT_FACE = FACE_DISPLAY;
+  txt("PAUSED", VW/2, VH/2 - 26, "#ffe066", 26, "center");
+  txt("SPACE OR TAP THE SCREEN", VW/2, VH/2 + 10, "#f4f0e4", 8, "center");
+  txt("TO CARRY ON",             VW/2, VH/2 + 24, "#f4f0e4", 8, "center");
+  TXT_FACE = FACE_MONO;
+}
+
 /* ---- CRT / VHS post pass ---------------------------------------
    Everything happens at 320x224 and gets upscaled ONCE. Cheaper by two
    orders of magnitude than compositing at output size, and a scanline
@@ -1772,31 +1808,36 @@ const keymap = {
 };
 addEventListener("keydown", e=>{
   if (keymap[e.key]){ input[keymap[e.key]] = true; e.preventDefault(); }
-  if (e.key === " "){ e.preventDefault(); advance(); }
+  if (e.key === " "){ e.preventDefault(); if (!togglePause()) advance(); }
   if (e.key === "c" || e.key === "C") state.crt = !state.crt;
   if (e.key === "m" || e.key === "M") Audio8.clickOn = !Audio8.clickOn;
 });
 addEventListener("keyup", e=>{ if (keymap[e.key]){ input[keymap[e.key]] = false; e.preventDefault(); } });
+
+/* Space on a keyboard, a tap on the screen with a thumb. Only during a run;
+   on the title and end screens those same inputs start the next one. */
+function togglePause(){
+  if (state.mode !== "play") return false;
+  state.paused = !state.paused;
+  if (state.paused) Audio8.hold(); else Audio8.letGo();
+  return true;
+}
 
 function advance(){
   if (state.mode === "play") return;
   Audio8.init();
   startRun();
 }
+/* The screen itself is no longer a control. Steering by where your thumb
+   landed on the glass was always a worse version of the pads, and it meant
+   a stray touch mid-corner threw the car. A tap on the screen pauses. */
 function pointer(e, down){
   e.preventDefault();
-  if (state.mode !== "play"){ if (down) advance(); return; }
-  input.left = input.right = input.up = false;
   if (!down) return;
-  const r = out.getBoundingClientRect();
-  for (const t of (e.touches ? Array.from(e.touches) : [e])){
-    const px = (t.clientX - r.left)/r.width, py = (t.clientY - r.top)/r.height;
-    if (py > 0.72 && px > 0.38 && px < 0.62) { input.up = true; continue; }
-    if (px < 0.5) input.left = true; else input.right = true;
-  }
+  if (state.mode !== "play"){ advance(); return; }
+  togglePause();
 }
 out.addEventListener("touchstart", e=>pointer(e,true), {passive:false});
-out.addEventListener("touchmove",  e=>pointer(e,true), {passive:false});
 out.addEventListener("touchend",   e=>pointer(e,false),{passive:false});
 out.addEventListener("mousedown",  e=>pointer(e,true));
 addEventListener("mouseup",        e=>pointer(e,false));
@@ -1828,6 +1869,7 @@ function frame(now){
   try {
     update(dt);
     if (state.mode === "play" || state.mode === "outro") render(); else { drawOverlayScreen(); }
+    if (state.paused) drawPaused();
     present();
   } catch (err) {
     if (!state.errLogged){ state.errLogged = true; console.error("[liebezeit] frame error", err); }

@@ -269,6 +269,8 @@
 
     if (joinList && email) subscribeEmbed(email);
 
+    // the game goes in the query as well as the body: the server reads either,
+    // and older deployments read only the query
     fetch(API + '?game=' + encodeURIComponent(cfg.game), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
