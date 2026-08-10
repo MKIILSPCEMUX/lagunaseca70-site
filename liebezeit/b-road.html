@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>LIEBEZEIT · B · the road</title>
+<title>LIEBEZEIT · Traffic Dodger</title>
 <style>
   /* LagunaPump: a fat rounded display face built to sit next to the Tago
      Mago lettering. Pump is monoline, so it is drawn as skeletons fattened
@@ -48,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.3.0 · 9 Aug";
+const VERSION      = "v1.4.0 · 10 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -185,10 +185,13 @@ const SECTIONS = [
    ground:["#8a5a3a","#764c30"], rumble:["#ffffff","#e0342c"],
    road:["#6e6068","#675960"], lane:"#ffe8d0", obj:["#7a3a30","#5e2c26","#ff9a3a"] },
 
- { bar:93, weather:"dusk",    curve:0.40, hill:0.32, density:0.5,
-   sky:["#0e1740","#5e3a72","#c47a76"], mtn:"#2c2a48", haze:"#c48a80",
-   ground:["#2a4a44","#23403a"], rumble:["#d8d0c0","#c4302a"],
-   road:["#4b4b55","#474751"], lane:"#d4cfbc", obj:["#1a3a2c","#143020","#4a4a5a"] },
+ /* The last stretch is late golden hour, not night. It used to sink to a
+    near-black dusk under a light curve that fell to 0.30, so you crossed the
+    line in the dark and could barely read the banner. */
+ { bar:93, weather:"goldenhour", curve:0.40, hill:0.32, density:0.5,
+   sky:["#2e4a92","#b0688e","#ffb264"], mtn:"#4a3c62", haze:"#ffb27e",
+   ground:["#4a6a4e","#3e5c42"], rumble:["#f2ecdc","#d43a30"],
+   road:["#6a6670","#645f69"], lane:"#f0e8d2", obj:["#2c5040","#204030","#6a6478"] },
 ];
 
 /* Every atmospheric value is a curve over bars, not a flag on a section.
@@ -247,6 +250,10 @@ const CITY      = [[1,0],[70,0],[74,0.12],[80,0.32],[86,0.58],[92,0.82],[96,1.0]
 const SUN_H     = [[1,28],[12,40],[26,52],[40,62],[52,72],[61,80],[68,80],
                    [74,68],[84,48],[93,32],[96,26]];
 const W_RAINBOW = [[1,0.0],[36,0.0],[39,1.0],[45,1.0],[49,0.0],[96,0.0]];
+/* Standing water lags the rain: it arrives once the downpour has had a bar or
+   two to collect, and it is still lying there after the sun comes back. Purely
+   cosmetic; it does not touch the handling. */
+const W_WET     = [[1,0.0],[28,0.0],[31,1.0],[37,1.0],[43,0.6],[49,0.0],[96,0.0]];
 
 /* The moon's transit, in units of the sun's radius. This used to be read
    off the coverage figure, which is symmetric, so the moon backed out the
@@ -266,7 +273,7 @@ const BOLT_T  = BOLTS.map(([bar,beat,six]) =>
    eclipse creeps in over twelve bars instead of switching on. */
 const LIGHT_KEYS = [[1,0.80],[6,0.94],[9,1.00],[26,1.00],[29,0.62],[33,0.80],
                     [45,0.95],[49,0.92],[55,0.72],[58,0.44],[61,0.34],[68,0.34],
-                    [70,1.05],[77,0.92],[88,0.70],[93,0.46],[97,0.30]];
+                    [70,1.05],[77,0.92],[88,0.88],[93,0.82],[97,0.78]];
 function lightAt(barF){
   let a=LIGHT_KEYS[0], b=LIGHT_KEYS[LIGHT_KEYS.length-1];
   for(let i=0;i<LIGHT_KEYS.length-1;i++){
@@ -487,7 +494,7 @@ const state = {
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
   banner:0, bannerSec:null, cue:"", cueT:0, outroT:0,
-  paused:false,
+  paused:false, wet:0, smoke:[], smokeT:0,
   light:0.5, eclipse:0, moonX:-3.4, night:false,
   bolt:null, boltT:0, boltIx:0, nextBolt:0, flashT:0, rain:0, chill:1, cloud:0, traffic_mul:1, city:0, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
@@ -698,6 +705,7 @@ function update(dt){
   state.cloud   = keyed(W_CLOUD, bf);
   state.dust    = keyed(W_DUST, bf);
   state.rainbow = keyed(W_RAINBOW, bf);
+  state.wet     = keyed(W_WET, bf);
 
   /* Lightning. Three fork strikes, landing on the synth lasers at 28.3.2,
      29.1.3 and 31.1.3. A while loop rather than an if, so a dropped frame
@@ -737,6 +745,29 @@ function update(dt){
   const steer = (input.left?-1:0)+(input.right?1:0);
   state.steerNow = steer;
   state.playerX += steer * STEER_RATE * dt * clamp(speedPct, 0.6, 1.0);
+
+  /* Tyre smoke. Screen-space puffs off the rear wheels while the wheel is
+     turned and there is speed to scrub. They drift outward and down the
+     screen, which is the world moving past, and swell as they thin out. */
+  state.smokeT -= dt;
+  if (steer !== 0 && speedPct > 0.45 && state.smokeT <= 0){
+    state.smokeT = 0.038;
+    for (const w of [-1, 1]){
+      // the outside wheel scrubs hardest, so it gets the fatter puff
+      const loaded = (w === -Math.sign(steer)) ? 1 : 0.62;
+      state.smoke.push({
+        x: VW/2 + w*27 + rnd(-2,2), y: VH - 21 + rnd(-2,2),
+        vx: w*14 - steer*26 + rnd(-8,8), vy: rnd(1, 9),
+        r: rnd(2.0, 3.4)*loaded, t: 0, life: rnd(0.34, 0.58)*loaded
+      });
+    }
+  }
+  for (let i=state.smoke.length-1; i>=0; i--){
+    const s = state.smoke[i];
+    s.t += dt;
+    if (s.t >= s.life){ state.smoke.splice(i,1); continue; }
+    s.x += s.vx*dt; s.y += s.vy*dt; s.r += 8.5*dt;
+  }
   state.playerX -= pSeg.curve * dz * CENTRIFUGAL;
   state.playerX = clamp(state.playerX, -3.2, 3.2);
 
@@ -853,6 +884,7 @@ function startRun(){
   state.segments.length=0; state.genCurve=0; state.genY=0; state.genBar=0;
   state.barStart.length=0; state.roadBarCursor=1;
   state.scenery.length=0; state.traffic.length=0; state.meteors.length=0;
+  state.smoke.length=0; state.smokeT=0; state.wet=0;
   state.bolt=null; state.boltT=0; state.boltIx=0; state.nextBolt=0; state.flashT=0;
   state.fxQueue.length=0; state.nextTick=0; state.lastTick=-1; state.timeLeft=34; state.score=0; state.chain=0; state.chainT=0; state.bestChain=0; state.pop=null;
   state.crashT=0; state.shake=0; state.banner=0;
@@ -1006,26 +1038,41 @@ function drawSky(horizon){
 
 /* A blocky skyline, deterministic so it does not shimmer, drawn between
    the mountains and the road. */
+/* A stable hash: same input, same number, forever. */
+function hash1(n){ const v = Math.sin(n*127.1 + 311.7)*43758.5453; return v - Math.floor(v); }
+
+/* The city on the horizon.
+
+   It used to place buildings at i*17 - (drift % 17), which slid the whole row
+   along and then snapped it back every 17px, handing each slot a new width and
+   height as it went. The windows were worse: their pattern came from the
+   building's SCREEN x, so it crawled through the brickwork as the city moved.
+   The result shimmered instead of standing still.
+
+   Now every building has a world index that never recycles. Its width, height
+   and window pattern all come from that index, and its screen position is a
+   plain subtraction. It is the same building the whole way in. */
 function drawCity(horizon, parallax){
   const c = state.city;
   if (c < 0.02) return;
   const base = Math.max(0, horizon);
-  const drift = (parallax*0.03) % 1000;
   ctx.save();
   ctx.beginPath(); ctx.rect(0, 0, VW, base+1); ctx.clip();
   const near = mixHex(pal("mtn"), "#161a2c", 0.55);
   const far  = mixHex(pal("haze"), "#2a3048", 0.62);
+  const SPAN = 17;
   for (let layer=0; layer<2; layer++){
     const depth = layer ? 1 : 0.62;
     const col   = layer ? near : far;
-    const px    = drift * (layer?1:0.55);
-    for (let i=-2;i<26;i++){
-      const seed = Math.sin((i+layer*37)*12.9898)*43758.5453;
-      const r    = seed - Math.floor(seed);
-      const w    = 7 + Math.floor(r*11);
-      const x    = Math.round(i*17 - (px % 17) + (layer?5:0));
+    const px    = parallax * 0.03 * (layer ? 1 : 0.55) + (layer ? -5 : 0);
+    const first = Math.floor(px / SPAN) - 1;
+    for (let k=0; k<Math.ceil(VW/SPAN)+3; k++){
+      const idx = first + k;
+      const r   = hash1(idx*1.7 + layer*137.3);
+      const w   = 7 + Math.floor(r*11);
+      const x   = Math.round(idx*SPAN - px);
       if (x > VW+12 || x < -14) continue;
-      const h    = Math.round((6 + r*30) * c * depth);
+      const h   = Math.round((6 + r*30) * c * depth);
       if (h < 2) continue;
       ctx.fillStyle = col;
       ctx.fillRect(x, base-h, w, h);
@@ -1033,9 +1080,10 @@ function drawCity(horizon, parallax){
       ctx.strokeRect(x+0.5, base-h+0.5, w-1, h);
       if (layer && h > 9 && c > 0.35){
         ctx.fillStyle = "rgba(255,226,140,"+(0.55*clamp((c-0.35)/0.5,0,1)).toFixed(2)+")";
-        for (let wy=base-h+3; wy<base-3; wy+=5)
-          for (let wx=x+2; wx<x+w-2; wx+=4)
-            if ((wx*7+wy*13) % 5 < 3) ctx.fillRect(wx, wy, 2, 2);
+        // window grid in the building's OWN coordinates, so it stays put
+        for (let wy=3; wy<h-3; wy+=5)
+          for (let wx=2; wx<w-2; wx+=4)
+            if ((idx*29 + wx*7 + wy*13) % 5 < 3) ctx.fillRect(x+wx, base-h+wy, 2, 2);
       }
     }
   }
@@ -1167,13 +1215,15 @@ function drawFinishLine(segs, baseIdx, horizon){
   ctx.strokeStyle = "#000"; ctx.lineWidth = Math.max(1, u(0.02));
   ctx.strokeRect(sx - sw - pw, sy - ph, sw*2 + pw*2, bh);
   if (bh > 11){
+    /* The place is the headline. FINISH was doing the shouting and the name of
+       the circuit was set in mouse type underneath it. */
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = "#c4241a";
-    ctx.font = "bold "+Math.round(bh*0.42)+"px ui-monospace, Menlo, monospace";
-    ctx.fillText("FINISH", sx, sy - ph + bh*0.32);
     ctx.fillStyle = "#20242c";
-    ctx.font = "bold "+Math.round(bh*0.22)+"px ui-monospace, Menlo, monospace";
-    ctx.fillText("WELCOME TO LAGUNA SECA", sx, sy - ph + bh*0.70);
+    ctx.font = Math.round(bh*0.20)+'px "LagunaPump", "Arial Black", sans-serif';
+    ctx.fillText("WELCOME TO", sx, sy - ph + bh*0.26);
+    ctx.fillStyle = "#c4241a";
+    ctx.font = Math.round(bh*0.46)+'px "LagunaPump", "Arial Black", sans-serif';
+    ctx.fillText("LAGUNA SECA", sx, sy - ph + bh*0.64);
   }
   // Kalinka, at the verge, tail going
   const kx = sx + u(1.5), ky = sy, kw = Math.max(2, u(0.16));
@@ -1194,17 +1244,32 @@ function drawFinishLine(segs, baseIdx, horizon){
 
 /* Flat sprite, drawn straight on. The body shifts a little under load but
    nothing rotates, so there is no angle at which it can look wrong. */
+function drawTyreSmoke(){
+  for (const s of state.smoke){
+    const k = 1 - s.t/s.life;
+    const r = Math.max(1, Math.round(s.r));
+    ctx.fillStyle = "rgba(232,228,218,"+(0.50*k*k).toFixed(3)+")";
+    ctx.fillRect(Math.round(s.x)-r, Math.round(s.y)-r, r*2, r*2);
+  }
+}
+
 function drawPlayerCar(){
   const bob = Math.sin(state.musicT*Math.PI/TICK)*0.5;
   const t   = state.lean*26;
   // in the outro the camera holds and the car drives away from it
   const o  = state.mode === "outro" ? clamp(state.outroT/5.2, 0, 1) : 0;
   const sh = 1 - o*0.93;
-  const cx = Math.round(VW/2 + state.lean*16*sh + (state.shake ? rnd(-state.shake,state.shake) : 0));
-  const cy = Math.round(lerp(VH - 24, VH*0.36, o*o) + bob*sh);
   if (o > 0.985) return;
-  const w = 54*sh, h = 30*sh;
+  const cx = Math.round(VW/2 + state.lean*16*sh + (state.shake ? rnd(-state.shake,state.shake) : 0));
+  // it recedes towards the vanishing point, not up into the sky
+  const cy = Math.round(lerp(VH - 24, VH*0.455, o*o) + bob*sh);
+  const w = 54, h = 30;
   ctx.save();
+  /* One transform for the whole car. It used to shrink w and h while every
+     wheel, lamp cluster and number plate stayed a fixed pixel size, so driving
+     away from the camera at the finish pulled the thing apart into a cloud of
+     blocks that drifted off. Scaling the context scales all of it together. */
+  if (sh !== 1){ ctx.translate(cx, cy); ctx.scale(sh, sh); ctx.translate(-cx, -cy); }
 
   ctx.strokeStyle="#000"; ctx.lineWidth=2;
   ctx.fillStyle="rgba(0,0,0,.45)";
@@ -1278,6 +1343,25 @@ function drawHeadlights(horizon){
   ctx.globalCompositeOperation = "source-over";
 }
 
+/* Standing water, laid on the tarmac. Placed from the segment's own index so
+   a puddle stays where it is in the world rather than crawling up the road at
+   you, and grouped four segments at a time so it reads as a pool and not a
+   stripe. Cosmetic: nothing here touches grip. */
+function drawPuddle(s, p1, p2){
+  const g = Math.floor(s.index / 4);
+  if (hash1(g*3.13) > 0.30 * state.wet) return;
+  const off = (hash1(g + 501.7)*2 - 1) * 0.72;
+  const wf  = 0.16 + hash1(g + 902.3)*0.26;
+  const a   = 0.34 * state.wet;
+  quad(ctx, p1.x + p1.w*off*2, p1.y, p1.w*wf,
+            p2.x + p2.w*off*2, p2.y, p2.w*wf,
+       "rgba(146,186,224,"+a.toFixed(3)+")");
+  // a brighter streak down the middle: the sky in the water
+  quad(ctx, p1.x + p1.w*off*2, p1.y, p1.w*wf*0.34,
+            p2.x + p2.w*off*2, p2.y, p2.w*wf*0.34,
+       "rgba(226,240,255,"+(a*0.7).toFixed(3)+")");
+}
+
 function render(){
   const segs = state.segments;
   if (!segs.length) return;
@@ -1336,6 +1420,7 @@ function render(){
                   p2.x + p2.w*lane*2, p2.y, lw2, pal("lane"));
       }
     }
+    if (state.wet > 0.02) drawPuddle(s, p1, p2);
   }
 
   /* sprites, far to near */
@@ -1364,6 +1449,7 @@ function render(){
 
   if (state.finishAt) drawFinishLine(segs, baseIdx, horizon);
   if (state.night) drawHeadlights(horizon);
+  drawTyreSmoke();
   drawPlayerCar();
 
   /* beat flashes */
@@ -1689,7 +1775,7 @@ function drawOverlayScreen(){
   }
   if (state.mode==="title"){
     txt("LIEBEZEIT", VW/2, 26, "#ff6ad0", 21, "center");
-    txt("THREAD THE TRAFFIC", VW/2, 58, "#ffc46a", 10, "center");
+    txt("TRAFFIC DODGER", VW/2, 58, "#ffc46a", 11, "center");
     drawNovaFront(VW/2, 176, 1.35);
     if ((t%1)<0.6) txt("PRESS SPACE OR TAP", VW/2, 244, "#f4f0e4", 11, "center");
     txt("EACH CLEAN PASS PAYS MORE", VW/2, VH-42, "#6a6458", 7, "center");
