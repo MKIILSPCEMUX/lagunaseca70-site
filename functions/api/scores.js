@@ -140,12 +140,23 @@ export async function onRequest(context) {
       return json({ game, closesAt, closed, count: listed.keys.length, scores: rows, entries: full });
     }
 
-    return json({ game, closesAt, closed, count: listed.keys.length, scores: rows, setup: true });
+    // The prize winner: the highest score submitted before the close. The board
+    // stays open afterwards, so newer (post-close) scores can sit above this on
+    // the live list, but the prize is locked to whoever led at the close.
+    let winner = null;
+    if (isPrize && closed) {
+      const closeMs = Date.parse(closesAt);
+      for (const k of listed.keys) {
+        const m = k.metadata;
+        if (m && typeof m.s === 'number' && m.t <= closeMs) { winner = { initials: m.i, score: m.s }; break; }
+      }
+    }
+
+    return json({ game, closesAt, closed, winner, count: listed.keys.length, scores: rows, setup: true });
   }
 
   if (request.method === 'POST') {
-    if (closed) return json({ error: 'closed', closed: true }, 403);
-
+    // Board stays open to new scores even after the prize closes.
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
 

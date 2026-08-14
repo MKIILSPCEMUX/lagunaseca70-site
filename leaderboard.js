@@ -12,7 +12,7 @@
 (function () {
   var API = '/api/scores';
   var cfg = { game: 'darkstar', accent: '#48d86b', prize: false, screen: null, onReplay: null };
-  var state = { closesAt: null, closed: false, scores: [], myTs: null, myEntry: null, token: null };
+  var state = { closesAt: null, closed: false, scores: [], myTs: null, myEntry: null, token: null, winner: null };
   var modal = null, overlay = null, keyCatcher = null;
 
   function el(tag, cls, html) {
@@ -128,6 +128,7 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         state.closesAt = d.closesAt; state.closed = !!d.closed; state.scores = d.scores || [];
+        state.winner = d.winner || null;
         mergeMine();
       })
       .catch(function () { /* offline: leave state as-is */ });
@@ -148,7 +149,11 @@
 
   function renderBoard() {
     if (!overlay) return;
-    var sub = cfg.prize ? (state.closed ? 'Competition closed' : fmtCountdown(state.closesAt)) : 'Top scores';
+    var sub;
+    if (cfg.prize && state.winner) sub = 'Winner ' + state.winner.initials + ' · ' + state.winner.score + ' · beat it';
+    else if (cfg.prize && !state.closed) sub = fmtCountdown(state.closesAt);
+    else if (cfg.prize) sub = 'Competition closed';
+    else sub = 'Top scores';
     var html = '<div class="lb-s-title">High Scores</div><div class="lb-s-sub">' + esc(sub) + '</div>';
     if (!state.scores.length) {
       html += '<div class="lb-s-empty">Be the first name on the board.</div>';
@@ -269,8 +274,6 @@
 
     if (joinList && email) subscribeEmbed(email);
 
-    // the game goes in the query as well as the body: the server reads either,
-    // and older deployments read only the query
     fetch(API + '?game=' + encodeURIComponent(cfg.game), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -317,8 +320,8 @@
     onGameStart: function () { fetchToken(); },
     onGameOver: function (score) {
       load().then(function () {
-        if (!state.closed && score > 0) showModal(score);
-        else showBoard();          // scored zero, or the prize has closed
+        if (score > 0) showModal(score);   // board stays open even after the prize closes
+        else showBoard();
       });
     },
     hideScreen: hideScreen,
