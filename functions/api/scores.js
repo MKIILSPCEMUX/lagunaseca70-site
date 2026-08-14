@@ -123,21 +123,22 @@ export async function onRequest(context) {
       return json({ added: { initials: aInitials, score: aScore }, game });
     }
 
-    const listed = await env.SCORES.list({ prefix, limit: 200 });
-    const rows = listed.keys
-      .map((k) => k.metadata)
-      .filter((m) => m && typeof m.s === 'number')
-      .slice(0, 10)
-      .map((m) => ({ initials: m.i, score: m.s, ts: m.t }));
+    const listed = await env.SCORES.list({ prefix, limit: 1000 });
+    // Sort by the actual score in metadata, NOT by key order. The key encodes
+    // cap-minus-score, so a change in the cap would otherwise mis-sort entries.
+    const keysByScore = listed.keys
+      .filter((k) => k.metadata && typeof k.metadata.s === 'number')
+      .sort((a, b) => b.metadata.s - a.metadata.s);
+    const rows = keysByScore.slice(0, 10).map((k) => ({ initials: k.metadata.i, score: k.metadata.s, ts: k.metadata.t }));
 
     // Admin dump (includes emails) when the secret matches.
     if (isAdmin) {
       const full = [];
-      for (const k of listed.keys.slice(0, 100)) {
+      for (const k of keysByScore.slice(0, 100)) {
         const v = await env.SCORES.get(k.name);
         if (v) { try { full.push(JSON.parse(v)); } catch (e) {} }
       }
-      return json({ game, closesAt, closed, count: listed.keys.length, scores: rows, entries: full });
+      return json({ game, closesAt, closed, count: keysByScore.length, scores: rows, entries: full });
     }
 
     // The prize winner: the highest score submitted before the close. The board
@@ -146,13 +147,12 @@ export async function onRequest(context) {
     let winner = null;
     if (isPrize && closed) {
       const closeMs = Date.parse(closesAt);
-      for (const k of listed.keys) {
-        const m = k.metadata;
-        if (m && typeof m.s === 'number' && m.t <= closeMs) { winner = { initials: m.i, score: m.s }; break; }
+      for (const k of keysByScore) {
+        if (k.metadata.t <= closeMs) { winner = { initials: k.metadata.i, score: k.metadata.s }; break; }
       }
     }
 
-    return json({ game, closesAt, closed, winner, count: listed.keys.length, scores: rows, setup: true });
+    return json({ game, closesAt, closed, winner, count: keysByScore.length, scores: rows, setup: true });
   }
 
   if (request.method === 'POST') {
