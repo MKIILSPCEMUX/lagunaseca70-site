@@ -18,28 +18,11 @@
  *   BUTTONDOWN_API_KEY  (secret)        — no longer used (opt-in is client-side embed)
  */
 
-const GAMES = ['darkstar', 'sneca', 'liebezeit'];
-// Plausible ceilings. A real run stays well under these; anything above is junk.
-/* Ceiling per game. Anything above this is refused outright, so it has to sit
-   well clear of a great run. Liebezeit was set at 250000 on a guess before the
-   game existed; a plain autopilot that only steers for the freest lane clears
-   420,000 over the 96 bars, so every real submission was being bounced with
-   'score out of range'. */
-const CAP = { darkstar: 12000, sneca: 700, liebezeit: 2000000 };
-
-/* The 'too fast' gate: a run that produced this score cannot have been shorter
-   than min + score/rate. rate is the fastest points per second any honest run
-   could manage, set generously, because a false rejection costs a real player
-   their score and a determined faker can simply wait anyway.
-
-   This used to be one hardcoded rule, age >= 2000 + score*12, which is
-   83 points per second. That is right for Dark Star and absurd for Liebezeit,
-   where a 400k run would have had to last 80 minutes. */
-const GATE = {
-  darkstar:  { min: 2000, rate: 83.34 },
-  sneca:     { min: 2000, rate: 83.34 },
-  liebezeit: { min: 8000, rate: 6000  },
-};
+const GAMES = ['darkstar', 'sneca'];
+// Plausible ceilings. Dark Star's track loops, so a marathon run can pile up;
+// the real anti-cheat is the time-gate below (which scales with the score), so
+// this just blocks absurd values. Sneca is grid-capped so it stays small.
+const CAP = { darkstar: 100000, sneca: 700 };
 const PAD = 7;                                    // width for the sortable inverse-score key
 const DEFAULT_CLOSE = '2026-08-14T19:00:00Z';     // 8pm UK time (BST) on Fri 14 Aug 2026; override with COMPETITION_CLOSE
 
@@ -80,19 +63,7 @@ function playSecret(env) {
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
-
-  /* GET carries the game in the query string; POST carries it in the body.
-     This used to read the query only, so EVERY submission was validated as
-     darkstar whatever game sent it. Liebezeit scores were bounced against
-     Dark Star's 12000 cap as 'score out of range'; Sneca's play token failed
-     its signature, because tokens are signed per game; and once the Dark Star
-     competition closes, every other game's submissions would have been
-     refused as 'closed' too. Entries also landed under entry:darkstar:. */
-  let body = null;
-  if (request.method === 'POST') {
-    try { body = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
-  }
-  const game = String((body && body.game) || url.searchParams.get('game') || 'darkstar').toLowerCase();
+  const game = (url.searchParams.get('game') || 'darkstar').toLowerCase();
 
   if (!GAMES.includes(game)) return json({ error: 'unknown game' }, 400);
 
@@ -131,6 +102,27 @@ export async function onRequest(context) {
       return json({ wiped: removed, game });
     }
 
+    // Admin: add a verified score by hand (for a legit run the game wrongly blocked)
+    //   …?game=darkstar&key=ADMIN_KEY&add=1&initials=IAU&score=19800&email=a@b.com
+    if (isAdmin && url.searchParams.get('add') === '1') {
+      const aInitials = String(url.searchParams.get('initials') || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+      const aScore = Math.floor(Number(url.searchParams.get('score')));
+      if (aInitials.length !== 3 || !Number.isFinite(aScore) || aScore < 0 || aScore > CAP[game]) {
+        return json({ error: 'bad add params' }, 400);
+      }
+      const aEmail = String(url.searchParams.get('email') || '').trim().toLowerCase();
+      const aJoin = url.searchParams.get('joinList') === 'true';
+      const aTs = Date.now();
+      const aRand = Math.random().toString(36).slice(2, 8);
+      const aKey = `entry:${game}:${invScore(game, aScore)}:${aTs}:${aRand}`;
+      await env.SCORES.put(
+        aKey,
+        JSON.stringify({ initials: aInitials, score: aScore, email: aEmail, joinList: aJoin, ts: aTs, admin: true }),
+        { metadata: { i: aInitials, s: aScore, t: aTs } }
+      );
+      return json({ added: { initials: aInitials, score: aScore }, game });
+    }
+
     const listed = await env.SCORES.list({ prefix, limit: 200 });
     const rows = listed.keys
       .map((k) => k.metadata)
@@ -154,6 +146,9 @@ export async function onRequest(context) {
   if (request.method === 'POST') {
     if (closed) return json({ error: 'closed', closed: true }, 403);
 
+    let body;
+    try { body = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
+
     // initials: exactly three letters
     const initials = String(body.initials || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
     if (initials.length !== 3) return json({ error: 'initials must be three letters' }, 400);
@@ -174,8 +169,7 @@ export async function onRequest(context) {
     if (!safeEq(tp[2], expectSig)) return json({ error: 'bad play token' }, 403);
     const age = Date.now() - iat;
     if (!(age >= 0 && age < 6 * 3600 * 1000)) return json({ error: 'token expired' }, 403);
-    const gate = GATE[game] || { min: 2000, rate: 83.34 };
-    if (age < gate.min + (score / gate.rate) * 1000) return json({ error: 'too fast' }, 403);
+    if (age < 2000 + score * 12) return json({ error: 'too fast' }, 403);
     const usedKey = 'used:' + tp[1];
     if (await env.SCORES.get(usedKey)) return json({ error: 'token already used' }, 409);
     await env.SCORES.put(usedKey, '1', { expirationTtl: 21600 });
