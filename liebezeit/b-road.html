@@ -48,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.7.0 · 10 Aug";
+const VERSION      = "v1.7.1 · 10 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -59,13 +59,13 @@ const ROAD_W       = 2000;
 const RUMBLE_LEN   = 5;          // band length: 3 strobed at about 7Hz, 5 is about 4Hz
 const FINISH_STOP  = SEGLEN*13;  // where the camera parks, short of the line
 const DASH_LEN     = 6;          // lane paint: on for this many, off for this many
-/* How far the dark band sits from the light one, per surface. Full separation
-   on both strobed hard enough to hurt; none at all and the road stopped
-   feeling fast. The verges carry most of it, because peripheral vision is
-   where speed is actually read, and the tarmac stays calm because that is
-   where you are looking. */
-const BAND_GROUND  = 0.78;
-const BAND_ROAD    = 0.30;
+/* How far the dark band sits from the light one, per surface. Back to full on
+   both: the tarmac banding is what carries speed and depth, and taking it out
+   cost more than it saved. The comfort now comes from LENGTH instead, which
+   halves the flicker rate without touching the contrast, and from the lane
+   paint running on its own count rather than switching with the bands. */
+const BAND_GROUND  = 1.0;
+const BAND_ROAD    = 1.0;
 const DRAW_DIST    = 240;
 const CAM_HEIGHT   = 820;           // lower camera reads faster
 const FOV          = 108;
@@ -529,8 +529,10 @@ const SFX_DIR   = "audio/fx/";
    the "a" set is already up around 1-2kHz and would only get shrill, and it
    runs about 4dB hotter, so each set carries its own pitch and level. */
 const CHAIN_SETS = [
-  { id:"orig", suffix:"",  rate:2.0, gain:0.34 },
-  { id:"alt",  suffix:"a", rate:1.0, gain:0.20 },
+  { id:"orig", suffix:"",  rate:2.0, gain:0.34, topGain:0.42 },
+  // the rungs wanted lifting; chain_topa was already sitting right, so the
+  // top note carries its own level rather than a multiple of the rungs
+  { id:"alt",  suffix:"a", rate:1.0, gain:0.30, topGain:0.24 },
 ];
 let CHAIN_SET = 1;                       // the "a" set, the one being tried
 const CHAIN_HOLD   = 4.6;
@@ -842,7 +844,7 @@ function update(dt){
     if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
     // the engine goes with the car: away, then gone
     const away = clamp(state.outroT/4.6, 0, 1);
-    Sfx.hold("engine", away < 1, 0.14*(1-away), 0.58 + 0.72*clamp(state.speed/BASE_SPEED,0,1.4));
+    Sfx.hold("engine", away < 1, 0.07*(1-away), 0.58 + 0.72*clamp(state.speed/BASE_SPEED,0,1.4));
     Sfx.hold("kerb", false, 0); Sfx.hold("verge", false, 0);
     if (state.outroT > 6.5){
       state.mode = "finish";
@@ -948,7 +950,7 @@ function update(dt){
   state.skidT = Math.max(0, state.skidT - dt);
   if (steer !== 0 && state.lastSteer === 0 && speedPct > 0.4 && state.skidT <= 0){
     state.skidT = 0.22;
-    Sfx.play("skid", 0.30, 0.96 + Math.random()*0.10);
+    Sfx.play("skid", 0.10, 0.96 + Math.random()*0.10);
   }
   state.lastSteer = steer;
 
@@ -986,7 +988,7 @@ function update(dt){
   /* The three continuous sounds. The engine follows the speedo; the rumble
      strip and the grass follow where the car actually is. */
   const spd = clamp(state.speed / BASE_SPEED, 0, 1.4);
-  Sfx.hold("engine", true, 0.15 + 0.13*spd, 0.58 + 0.72*spd);
+  Sfx.hold("engine", true, 0.075 + 0.065*spd, 0.58 + 0.72*spd);
   const onKerb = !offRoad && Math.abs(state.playerX) > 0.90;
   Sfx.hold("kerb",  onKerb, 0.42, 0.85 + 0.35*spd);
   Sfx.hold("verge", offRoad, 0.34, 0.80 + 0.40*spd);
@@ -1035,7 +1037,7 @@ function update(dt){
         const tPass = dzc / closing;
         if (tPass > 0 && tPass <= Sfx.passLead && Sfx.live < 2){
           c.armed = true; Sfx.live++;
-          c.passSrc = Sfx.play("pass", 0.26);
+          c.passSrc = Sfx.play("pass", 0.36);
           if (c.passSrc) c.passSrc.onended = () => { Sfx.live = Math.max(0, Sfx.live-1); };
           else Sfx.live = Math.max(0, Sfx.live-1);
         }
@@ -1075,7 +1077,7 @@ function update(dt){
   state.chainT = Math.max(0, state.chainT - dt);
   state.timeAdd = Math.max(0, state.timeAdd - dt);
   if (state.chainT <= 0 && state.chain){
-    if (state.chain > 2) Sfx.play("chain_break", 0.34);
+    if (state.chain > 1) Sfx.play("chain_break", 0.5);
     state.bestChain=Math.max(state.bestChain,state.chain); state.chain = 0;
   }
   if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
@@ -1100,7 +1102,7 @@ function addLink(base){
     Sfx.release(state.chainSrc, 0.16); state.chainSrc = null;
     // chain1..8 climb the ladder; past the octave it holds on chain_top
     state.chainSrc = (state.chain > CHAIN_CAP+1)
-      ? Sfx.play("chain_top" + set.suffix, set.gain*1.2, set.rate)
+      ? Sfx.play("chain_top" + set.suffix, set.topGain, set.rate)
       : Sfx.play("chain" + (step+1) + set.suffix, set.gain, set.rate);
   } else Audio8.note(step, state.chain > CHAIN_CAP+1);
   const gain = Math.round(base * Math.min(state.chain, 30));
@@ -1111,8 +1113,11 @@ function addLink(base){
 function crash(mag){
   /* The impact reads first and the chain breaking answers it. Both at once
      was one muddled noise. */
-  Sfx.play("hit", clamp(0.32 + 0.26*mag, 0, 1));
-  if (state.chain > 2) Sfx.play("chain_break", 0.46, 1, 0.28);
+  Sfx.play("hit", clamp(0.42 + 0.32*mag, 0, 1));
+  /* This wanted a chain above two, so most crashes never triggered it, and at
+     0.46 against a hit five times louder in RMS you would not have caught the
+     ones that did. Any chain worth the name now breaks audibly. */
+  if (state.chain > 1) Sfx.play("chain_break", 0.85, 1, 0.26);
   // a whoosh already in the air belongs to a pass that is not going to happen
   for (const c of state.traffic){ if (c.passSrc){ Sfx.release(c.passSrc, 0.08); c.passSrc = null; } }
   state.bestChain = Math.max(state.bestChain, state.chain);
@@ -1280,28 +1285,26 @@ function drawSky(horizon){
     ctx.lineTo(x+sz*2.28, y+sz*0.42); ctx.stroke();
     ctx.globalAlpha = 1;
   }
+  /* Back inside the sky, ahead of the dust and the horizon haze strip and
+     therefore behind the mountains, which is where it has always been. Drawn
+     after them instead, the legs land hard on the horizon with nothing
+     painted over them, and the haze strip no longer softens the feet. */
+  if (state.rainbow > 0.02){
+    const rx = VW/2, ry = h+46, cols=["#ff2a2a","#ff8a1e","#ffe81e","#3ad44e","#1e8aff","#a03aff"];
+    const grow = state.rainbow;
+    for (let i=0;i<cols.length;i++){
+      ctx.strokeStyle = cols[i]; ctx.globalAlpha = 0.80*grow; ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(rx, ry, 106 - i*4, Math.PI, Math.PI + Math.PI*grow); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
   if (state.dust > 0.02){
     ctx.globalAlpha = state.dust*0.35; ctx.fillStyle = "#e0b060";
     ctx.fillRect(0, Math.max(0,h-30), VW, 32); ctx.globalAlpha = 1;
   }
   ctx.fillStyle = pal("haze"); ctx.globalAlpha = 0.85;
   ctx.fillRect(0, Math.max(0, horizon-4), VW, 5); ctx.globalAlpha = 1;
-}
-
-/* The rainbow used to be drawn inside the sky, which put it behind the
-   mountains: an arc that stopped dead at the ridge. It hangs in the air in
-   front of them, so it is drawn after. */
-function drawRainbow(horizon){
-  if (state.rainbow <= 0.02) return;
-  const h = Math.max(0, horizon);
-  const rx = VW/2, ry = h+46, grow = state.rainbow;
-  const cols = ["#ff2a2a","#ff8a1e","#ffe81e","#3ad44e","#1e8aff","#a03aff"];
-  for (let i=0;i<cols.length;i++){
-    ctx.strokeStyle = cols[i]; ctx.globalAlpha = 0.80*grow; ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(rx, ry, 106 - i*4, Math.PI, Math.PI + Math.PI*grow); ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
 }
 
 /* A blocky skyline, deterministic so it does not shimmer, drawn between
@@ -1676,7 +1679,6 @@ function render(){
   drawSky(horizon);
   drawMountains(horizon, state.position*0.01 + state.playerX*-40);
   drawCity(horizon, state.position*0.01 + state.playerX*-40);
-  drawRainbow(horizon);
   ctx.restore();
 
   // now the road itself
