@@ -12,7 +12,8 @@
 (function () {
   var API = '/api/scores';
   var cfg = { game: 'darkstar', accent: '#48d86b', prize: false, screen: null, onReplay: null };
-  var state = { closesAt: null, closed: false, scores: [], myTs: null, myEntry: null, token: null, winner: null };
+  var state = { opensAt: null, closesAt: null, closed: false, open: false, winner: null,
+                scores: [], myTs: null, myEntry: null, token: null };
   var modal = null, overlay = null, keyCatcher = null;
 
   function el(tag, cls, html) {
@@ -86,12 +87,26 @@
       '.lb-s-ini{font-weight:800;letter-spacing:0.16em;width:52px;}' +
       '.lb-s-sc{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;}' +
       '.lb-s-row.me .lb-s-ini,.lb-s-row.me .lb-s-sc{color:var(--lb-accent);}' +
+      /* the settled winner, pinned above the live board */
+      '.lb-s-row.win{background:rgba(255,214,90,0.14);border:1px solid rgba(255,214,90,0.5);' +
+        'border-radius:7px;padding:6px 7px;margin-bottom:2px;}' +
+      '.lb-s-row.win .lb-s-rank{color:#ffd65a;}' +
+      '.lb-s-row.win .lb-s-ini,.lb-s-row.win .lb-s-sc{color:#ffd65a;font-weight:800;}' +
+      '.lb-s-wl{font-size:8px;letter-spacing:0.14em;text-transform:uppercase;opacity:0.65;' +
+        'text-align:center;margin:0 0 10px;}' +
       '.lb-s-empty{opacity:0.7;text-align:center;font-size:12px;padding:18px 0;flex:1;}' +
       '.lb-s-foot{text-align:center;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;margin-top:12px;color:var(--lb-accent);}';
     var s = el('style'); s.id = 'lb-style'; s.textContent = css;
     document.head.appendChild(s);
   }
 
+  function fmtSpan(ms) {
+    if (ms < 0) ms = 0;
+    var d = Math.floor(ms / 86400000);
+    var h = Math.floor((ms % 86400000) / 3600000);
+    var m = Math.floor((ms % 3600000) / 60000);
+    return d ? (d + 'd ' + h + 'h') : (h + 'h ' + m + 'm');
+  }
   function fmtCountdown(closesAt) {
     var ms = Date.parse(closesAt) - Date.now();
     if (ms <= 0) return 'Closed';
@@ -127,8 +142,9 @@
     return fetch(API + '?game=' + encodeURIComponent(cfg.game), { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        state.closesAt = d.closesAt; state.closed = !!d.closed; state.scores = d.scores || [];
-        state.winner = d.winner || null;
+        state.opensAt = d.opensAt || null; state.closesAt = d.closesAt;
+        state.closed = !!d.closed; state.open = !!d.open;
+        state.winner = d.winner || null; state.scores = d.scores || [];
         mergeMine();
       })
       .catch(function () { /* offline: leave state as-is */ });
@@ -149,12 +165,22 @@
 
   function renderBoard() {
     if (!overlay) return;
+    /* Three states, not two. Before it opens the board is live but nothing on
+       it counts; while it runs there is a clock; after it closes the winner is
+       settled and pinned, and the board carries on taking scores. */
     var sub;
-    if (cfg.prize && state.winner) sub = 'Winner ' + state.winner.initials + ' · ' + state.winner.score + ' · beat it';
-    else if (cfg.prize && !state.closed) sub = fmtCountdown(state.closesAt);
-    else if (cfg.prize) sub = 'Competition closed';
-    else sub = 'Top scores';
+    if (!cfg.prize) sub = 'Top scores';
+    else if (state.closed) sub = 'Competition closed';
+    else if (state.opensAt && Date.parse(state.opensAt) > Date.now())
+      sub = 'Opens in ' + fmtSpan(Date.parse(state.opensAt) - Date.now());
+    else sub = fmtCountdown(state.closesAt);
     var html = '<div class="lb-s-title">High Scores</div><div class="lb-s-sub">' + esc(sub) + '</div>';
+    if (state.winner) {
+      html += '<div class="lb-s-row win"><span class="lb-s-rank">&#9733;</span>' +
+        '<span class="lb-s-ini">' + esc(state.winner.initials) + '</span>' +
+        '<span class="lb-s-sc">' + state.winner.score + '</span></div>' +
+        '<div class="lb-s-wl">Competition winner</div>';
+    }
     if (!state.scores.length) {
       html += '<div class="lb-s-empty">Be the first name on the board.</div>';
     } else {
@@ -245,7 +271,7 @@
     pendingScore = score; busy = false;
     modal.querySelector('.lb-scoreval').textContent = String(score);
     modal.querySelector('.lb-cp').textContent = cfg.prize
-      ? 'Highest score when the clock runs out wins the EP and album. Add your email to claim a prize if you win.'
+      ? (cfg.prizeText || 'Highest score when the clock runs out wins. Add your email to claim a prize if you win.')
       : 'Post your initials to the board. Email only needed to join the list.';
     modal.querySelectorAll('.lb-inis input').forEach(function (i) { i.value = ''; });
     modal.querySelector('.lb-email').value = '';
@@ -274,6 +300,8 @@
 
     if (joinList && email) subscribeEmbed(email);
 
+    // the game goes in the query as well as the body: the server reads either,
+    // and older deployments read only the query
     fetch(API + '?game=' + encodeURIComponent(cfg.game), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -311,6 +339,7 @@
       cfg.game = game;
       cfg.accent = opts.accent || cfg.accent;
       cfg.prize = !!opts.prize;
+      cfg.prizeText = opts.prizeText || null;
       cfg.screen = opts.screen || null;
       cfg.onReplay = opts.onReplay || null;
       injectStyle();
@@ -320,8 +349,8 @@
     onGameStart: function () { fetchToken(); },
     onGameOver: function (score) {
       load().then(function () {
-        if (score > 0) showModal(score);   // board stays open even after the prize closes
-        else showBoard();
+        if (!state.closed && score > 0) showModal(score);
+        else showBoard();          // scored zero, or the prize has closed
       });
     },
     hideScreen: hideScreen,

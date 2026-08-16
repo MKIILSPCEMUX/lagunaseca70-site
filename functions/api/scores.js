@@ -42,6 +42,16 @@ const GATE = {
 const PAD = 7;                                    // width for the sortable inverse-score key
 const DEFAULT_CLOSE = '2026-08-14T19:00:00Z';     // 8pm UK time (BST) on Fri 14 Aug 2026; override with COMPETITION_CLOSE
 
+/* Competition windows, per game. A game with no entry here just has a board
+   that never closes. opens matters as much as closes: a score set before the
+   competition starts belongs on the board but is not in the running for the
+   prize. Times are UTC, and Britain is on BST through August, so 22:00 local
+   is 21:00 here. */
+const PRIZE = {
+  darkstar:  { opens: null,                   closes: DEFAULT_CLOSE },
+  liebezeit: { opens: '2026-08-17T21:00:00Z', closes: '2026-08-31T21:00:00Z' },
+};
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -93,14 +103,18 @@ export async function onRequest(context) {
 
   if (!GAMES.includes(game)) return json({ error: 'unknown game' }, 400);
 
-  // Only Dark Star carries the timed prize. Sneca's board stays open indefinitely.
-  const isPrize = game === 'darkstar';
-  const closesAt = isPrize ? (env.COMPETITION_CLOSE || DEFAULT_CLOSE) : null;
-  const closed = isPrize && Date.now() > Date.parse(closesAt);
+  // Dark Star and Liebezeit each carry a timed prize; Sneca's board never closes.
+  const prize    = PRIZE[game] || null;
+  const isPrize  = !!prize;
+  const closesAt = !prize ? null
+                 : (game === 'darkstar' ? (env.COMPETITION_CLOSE || prize.closes) : prize.closes);
+  const opensAt  = prize ? prize.opens : null;
+  const closed   = isPrize && Date.now() > Date.parse(closesAt);
+  const open     = isPrize && !closed && (!opensAt || Date.now() >= Date.parse(opensAt));
 
   if (!env.SCORES) {
     // KV not bound yet — behave gracefully so the site still works pre-setup.
-    return json({ game, closesAt, closed, scores: [], count: 0, setup: false });
+    return json({ game, opensAt, closesAt, closed, open, scores: [], count: 0, setup: false });
   }
 
   if (request.method === 'GET') {
@@ -108,6 +122,15 @@ export async function onRequest(context) {
 
     // Issue a signed play token for a run that's starting.
     if (url.searchParams.get('start')) {
+      /* Tokens are the thing worth hoarding, so cap how many one address can
+         collect. A player restarting hard might get through twenty an hour;
+         a script wanting a stack of them cannot. */
+      const tip = request.headers.get('cf-connecting-ip') || 'x';
+      const tKey = `tk:${game}:${tip}:${Math.floor(Date.now() / 3600000)}`;
+      const tN = Number((await env.SCORES.get(tKey)) || 0);
+      if (tN >= 40) return json({ error: 'slow down' }, 429);
+      await env.SCORES.put(tKey, String(tN + 1), { expirationTtl: 7200 });
+
       const iat = Date.now();
       const nonce = crypto.randomUUID();
       const sig = await hmacHex(playSecret(env), game + '.' + iat + '.' + nonce);
@@ -164,7 +187,7 @@ export async function onRequest(context) {
         const v = await env.SCORES.get(k.name);
         if (v) { try { full.push(JSON.parse(v)); } catch (e) {} }
       }
-      return json({ game, closesAt, closed, count: keysByScore.length, scores: rows, entries: full });
+      return json({ game, opensAt, closesAt, closed, open, count: keysByScore.length, scores: rows, entries: full });
     }
 
     // The prize winner: the highest score submitted before the close. The board
@@ -173,12 +196,14 @@ export async function onRequest(context) {
     let winner = null;
     if (isPrize && closed) {
       const closeMs = Date.parse(closesAt);
+      const openMs  = opensAt ? Date.parse(opensAt) : 0;
       for (const k of keysByScore) {
-        if (k.metadata.t <= closeMs) { winner = { initials: k.metadata.i, score: k.metadata.s }; break; }
+        const t = k.metadata.t;
+        if (t <= closeMs && t >= openMs) { winner = { initials: k.metadata.i, score: k.metadata.s }; break; }
       }
     }
 
-    return json({ game, closesAt, closed, winner, count: keysByScore.length, scores: rows, setup: true });
+    return json({ game, opensAt, closesAt, closed, open, winner, count: keysByScore.length, scores: rows, setup: true });
   }
 
   if (request.method === 'POST') {
@@ -202,9 +227,21 @@ export async function onRequest(context) {
     const expectSig = await hmacHex(playSecret(env), game + '.' + tp[0] + '.' + tp[1]);
     if (!safeEq(tp[2], expectSig)) return json({ error: 'bad play token' }, 403);
     const age = Date.now() - iat;
-    if (!(age >= 0 && age < 6 * 3600 * 1000)) return json({ error: 'token expired' }, 403);
+    /* A run is under five minutes. Six hours of token life was six hours in
+       which a harvested token could be sat on; 45 minutes is still generous
+       for someone who paused. */
+    if (!(age >= 0 && age < 45 * 60 * 1000)) return json({ error: 'token expired' }, 403);
     const gate = GATE[game] || { min: 2000, rate: 83.34 };
     if (age < gate.min + (score / gate.rate) * 1000) return json({ error: 'too fast' }, 403);
+    /* Per-IP ceiling. The play token is the real gate, but tokens are free to
+       fetch, so this caps how fast one machine can spend them. A genuine run
+       is about four minutes, so nobody honest gets near this. */
+    const ip = request.headers.get('cf-connecting-ip') || 'x';
+    const rlKey = `rl:${game}:${ip}:${Math.floor(Date.now() / 3600000)}`;
+    const rlN = Number((await env.SCORES.get(rlKey)) || 0);
+    if (rlN >= 15) return json({ error: 'too many submissions, try again later' }, 429);
+    await env.SCORES.put(rlKey, String(rlN + 1), { expirationTtl: 7200 });
+
     const usedKey = 'used:' + tp[1];
     if (await env.SCORES.get(usedKey)) return json({ error: 'token already used' }, 409);
     await env.SCORES.put(usedKey, '1', { expirationTtl: 21600 });

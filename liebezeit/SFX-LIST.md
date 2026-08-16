@@ -2,7 +2,7 @@
 
 All of it recorded by Mike. The masters live in `liebezeit/audio/sfx/` as wav
 and are gitignored; the browser loads the compressed set in
-`liebezeit/audio/fx/`, which is 490KB against 4.7MB of wav.
+`liebezeit/audio/fx/`, which is 624KB against 4.7MB of wav.
 
 ## What plays, and when
 
@@ -13,7 +13,6 @@ and are gitignored; the browser loads the compressed set in
 | `pass` | **before** each overtake, so its drop lands as you go past. See below |
 | `chain1`–`chain8` | each link of the chain, climbing the ladder |
 | `chain_top` | past the octave, where the ladder holds |
-| `chain_break` | the chain lost, by contact or by letting it lapse. Only above x2 |
 | `hit` | contact, scaled by how hard |
 | `kerb` | continuous, while a wheel is on the rumble strip (0.90 to 1.05 road-widths out) |
 | `verge` | continuous, once you are off on the grass (past 1.05) |
@@ -21,7 +20,15 @@ and are gitignored; the browser loads the compressed set in
 | `timeout` | the clock reaching zero |
 
 Not recorded, and not needed: thunder, totality and the dog. Those moments are
-already in the track.
+already in the track. `chain_break` was recorded and then dropped: after a hit
+it added nothing you could hear over the hit itself.
+
+## The chain ladder is the second set
+
+Mike recorded the chain twice. The second set, the files ending in `a`, is the
+one in use. The manifest maps the code names onto them, so `chain1` loads
+`chain1a.mp3` and the game code never mentions the letter. The nine originals
+(`chain1`–`chain8`, `chain_top`) and `chain_break` are unused and can go.
 
 ## Two things the code measures instead of being told
 

@@ -236,7 +236,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.8.0</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.9.0</div>
       </div>
 
       <div class="bezel">
@@ -271,7 +271,7 @@
       <div class="hull-foot">
         <span class="foot-play">Arrows steer &middot; up down throttle</span>
         <span class="foot-play">Traffic Dodger</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.8.0</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.9.0</span>
       </div>
     </div>
   </div>
@@ -303,7 +303,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.8.0 · 10 Aug";
+const VERSION      = "v1.9.0 · 16 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -312,6 +312,8 @@ const SEGLEN       = 200;
 const SEGS_PER_BAR = 196;           // nominal ground covered in one bar
 const ROAD_W       = 2000;
 const RUMBLE_LEN   = 5;          // band length: 3 strobed at about 7Hz, 5 is about 4Hz
+const FINISH_BAR   = 93;         // the line lands on this downbeat
+const FINISH_T     = (FINISH_BAR-1) * BAR;
 const FINISH_STOP  = SEGLEN*13;  // where the camera parks, short of the line
 const DASH_LEN     = 6;          // lane paint: on for this many, off for this many
 /* How far the dark band sits from the light one, per surface. Back to full on
@@ -524,7 +526,7 @@ const W_WET     = [[1,0.0],[28,0.0],[31,1.0],[37,1.0],[43,0.6],[49,0.0],[96,0.0]
    way it came in. Coverage still drives the darkness; this drives the
    moon, and it only goes one way: in from the left, sits over the sun for
    the dark bars, then out to the right. */
-const MOON_X    = [[1,3.4],[49,2.6],[61,0],[68,0],[72,-2.6],[96,-3.4]];
+const MOON_X    = [[1,-3.4],[49,-2.6],[61,0],[68,0],[72,2.6],[96,3.4]];
 
 /* The three fork strikes, placed on the synth lasers rather than thrown
    at random. Written as bar.beat.sixteenth, all counted from one, so
@@ -779,26 +781,16 @@ const Audio8 = {
 /* Mike's masters stay in audio/sfx/ as 4.7MB of wav. What the browser
    downloads is this: the same set at 490KB, in audio/fx/. */
 const SFX_DIR   = "audio/fx/";
-/* Two ladders, both shipped, switched with N so they can be compared in play
-   rather than by memory. The originals are recorded low and want the octave;
-   the "a" set is already up around 1-2kHz and would only get shrill, and it
-   runs about 4dB hotter, so each set carries its own pitch and level. */
-const CHAIN_SETS = [
-  { id:"orig", suffix:"",  rate:2.0, gain:0.34, topGain:0.42 },
-  // the rungs wanted lifting; chain_topa was already sitting right, so the
-  // top note carries its own level rather than a multiple of the rungs
-  { id:"alt",  suffix:"a", rate:1.0, gain:0.30, topGain:0.24 },
-];
-let CHAIN_SET = 1;                       // the "a" set, the one being tried
+/* The ladder Mike settled on. It sits around 1-2kHz already, so no octave
+   shift, and the top note carries its own level because it was sitting right
+   where the rungs needed lifting. */
+const CHAIN_GAIN = 0.30, CHAIN_TOP_GAIN = 0.24;
 const CHAIN_HOLD   = 4.6;
 const SFX_FILES = {
   engine:"engine.wav", kerb:"kerb.wav", verge:"verge.wav",
-  chain1:"chain1.mp3", chain2:"chain2.mp3", chain3:"chain3.mp3", chain4:"chain4.mp3",
-  chain5:"chain5.mp3", chain6:"chain6.mp3", chain7:"chain7.mp3", chain8:"chain8.mp3",
-  chain_top:"chain_top.mp3",
-  chain1a:"chain1a.mp3", chain2a:"chain2a.mp3", chain3a:"chain3a.mp3", chain4a:"chain4a.mp3",
-  chain5a:"chain5a.mp3", chain6a:"chain6a.mp3", chain7a:"chain7a.mp3", chain8a:"chain8a.mp3",
-  chain_topa:"chain_topa.mp3",
+  chain1:"chain1a.mp3", chain2:"chain2a.mp3", chain3:"chain3a.mp3", chain4:"chain4a.mp3",
+  chain5:"chain5a.mp3", chain6:"chain6a.mp3", chain7:"chain7a.mp3", chain8:"chain8a.mp3",
+  chain_top:"chain_topa.mp3",
   pass:"pass.mp3", hit:"hit.mp3", timeout:"timeout.mp3", skid:"skid.mp3",
   finish:"finish.mp3", start:"start.mp3"
 };
@@ -973,8 +965,13 @@ function generateBar(){
   const n   = SEGS_PER_BAR;
 
   state.barStart[b] = state.segments.length;
-  const curveTarget = row.c * 1.75;
-  const hillDelta   = row.h * 1600;
+  /* The last few bars run straight and level into the line. On a corner the
+     banner ends up off to one side and half out of frame, and the finish is
+     the one shot in the game that has to compose. */
+  const bb = ((b-1)%TOTAL_BARS)+1;
+  const runIn = bb >= FINISH_BAR - 2;
+  const curveTarget = runIn ? 0 : row.c * 1.75;
+  const hillDelta   = runIn ? 0 : row.h * 1600;
   const startY = state.genY, startC = state.genCurve;
   for (let i=0;i<n;i++){
     const e0 = smooth(i/n), e1 = smooth((i+1)/n);
@@ -1094,13 +1091,31 @@ function update(dt){
     state.outroT += dt;
     // the camera is fixed at the line: the road stops, the car does not
     state.speed *= (1 - 0.55*dt);
+    /* Straighten onto the middle of the road. You are not driving any more, and
+       finishing hard against the left kerb put the banner half out of frame.
+       Nothing is taken from the player: the line is already behind them. */
+    state.playerX += (0 - state.playerX) * Math.min(1, 3.4*dt);
     state.shake = Math.max(0, state.shake - dt*4);
     if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
+
+    /* Traffic carries on through the line and the last of the dust settles.
+       Both used to freeze where they were, leaving cars parked across the road
+       and a puff of dust hanging in the air for the whole outro. */
+    for (let i=state.traffic.length-1; i>=0; i--){
+      const c = state.traffic[i];
+      c.z += c.speed * dt * 1.6;
+      if (c.z > state.position + DRAW_DIST*SEGLEN) state.traffic.splice(i,1);
+    }
+    for (let i=state.smoke.length-1; i>=0; i--){
+      const sp = state.smoke[i]; sp.t += dt;
+      if (sp.t >= sp.life){ state.smoke.splice(i,1); continue; }
+      sp.x += sp.vx*dt; sp.y += sp.vy*dt; sp.r += (sp.grow || 8.5)*dt;
+    }
     // the engine goes with the car: away, then gone
     const away = clamp(state.outroT/4.6, 0, 1);
     Sfx.hold("engine", away < 1, 0.07*(1-away), 0.58 + 0.72*clamp(state.speed/BASE_SPEED,0,1.4));
     Sfx.hold("kerb", false, 0); Sfx.hold("verge", false, 0);
-    if (state.outroT > 6.5){
+    if (state.outroT > (TOTAL_BARS - FINISH_BAR + 1) * BAR - 0.6){
       state.mode = "finish";
       if (typeof LEADERBOARD_ENABLED !== "undefined" && LEADERBOARD_ENABLED && window.Leaderboard)
         Leaderboard.onGameOver(Math.floor(state.score));
@@ -1119,14 +1134,16 @@ function update(dt){
   const bar  = Math.floor(barF) + 1;
 
   if (bar > TOTAL_BARS){ finish(); return; }
-  if (state.musicT > SONG_LEN - 5.0 && !state.finishAt){
-    // put the line five seconds of music ahead, so you drive through it
-    state.finishAt = state.position + state.speed * 4.6;
+  /* The camera parks on the downbeat of FINISH_BAR, and finishAt is re-solved
+     every frame from the CURRENT speed, the same way scenery is placed, so it
+     lands on the beat whatever the player does with the throttle. That leaves
+     the last four bars of the track playing over a still frame. */
+  if (state.musicT > FINISH_T - 9 && state.mode === "play"){
+    const left = FINISH_T - state.musicT;
+    state.finishAt = state.position + state.speed*left + FINISH_STOP;
+    if (left <= 0){ finish(); return; }
   }
-  /* Stop the camera SHORT of the banner rather than under it. It used to run
-     until the line was past the lens, which left the banner behind you for the
-     whole outro. FINISH_STOP is the gap it holds. */
-  if (state.finishAt && state.position > state.finishAt - FINISH_STOP){ finish(); return; }
+
 
   if (bar !== state.bar){
     state.bar = bar;
@@ -1208,28 +1225,6 @@ function update(dt){
   }
   state.lastSteer = steer;
 
-  /* Tyre smoke. Screen-space puffs off the rear wheels while the wheel is
-     turned and there is speed to scrub. They drift outward and down the
-     screen, which is the world moving past, and swell as they thin out. */
-  state.smokeT -= dt;
-  if (steer !== 0 && speedPct > 0.45 && state.smokeT <= 0){
-    state.smokeT = 0.038;
-    for (const w of [-1, 1]){
-      // the outside wheel scrubs hardest, so it gets the fatter puff
-      const loaded = (w === -Math.sign(steer)) ? 1 : 0.62;
-      state.smoke.push({
-        x: VW/2 + w*27 + rnd(-2,2), y: VH - 21 + rnd(-2,2),
-        vx: w*14 - steer*26 + rnd(-8,8), vy: rnd(1, 9),
-        r: rnd(2.0, 3.4)*loaded, t: 0, life: rnd(0.34, 0.58)*loaded
-      });
-    }
-  }
-  for (let i=state.smoke.length-1; i>=0; i--){
-    const s = state.smoke[i];
-    s.t += dt;
-    if (s.t >= s.life){ state.smoke.splice(i,1); continue; }
-    s.x += s.vx*dt; s.y += s.vy*dt; s.r += 8.5*dt;
-  }
   state.playerX -= pSeg.curve * dz * CENTRIFUGAL;
   state.playerX = clamp(state.playerX, -3.2, 3.2);
 
@@ -1239,13 +1234,48 @@ function update(dt){
     state.shake  = Math.max(state.shake, 1.2);
   }
 
+  /* Tyre smoke. Screen-space puffs off the rear wheels while the wheel is
+     turned and there is speed to scrub. They drift outward and down the
+     screen, which is the world moving past, and swell as they thin out. */
+  state.smokeT -= dt;
+  /* Two kinds of puff off the same wheels. On tarmac it is a wisp of rubber
+     smoke when you turn in. On the grass it is dust, and it does not need you
+     to be steering: the wheels are throwing it up the whole time you are out
+     there. Bigger, browner, and far more of it. */
+  const dusting = offRoad && speedPct > 0.18;
+  if ((dusting || (steer !== 0 && speedPct > 0.45)) && state.smokeT <= 0){
+    state.smokeT = dusting ? 0.022 : 0.038;
+    /* Dust throws two puffs per wheel and throws them OUTWARD hard, because
+       anything spawned tight behind the car is drawn under it and never seen.
+       Smoke stays as one wisp per wheel. */
+    for (const w of [-1, 1]) for (let n = 0; n < (dusting ? 2 : 1); n++){
+      const loaded = dusting ? 1 : ((w === -Math.sign(steer)) ? 1 : 0.62);
+      state.smoke.push({
+        x: VW/2 + w*(dusting ? 30 : 27) + rnd(-3,3),
+        y: VH - (dusting ? 16 : 21) + rnd(-2,2),
+        vx: dusting ? w*rnd(34, 62) : w*14 - steer*26 + rnd(-8,8),
+        vy: dusting ? rnd(-14, 4) : rnd(1, 9),
+        r: (dusting ? rnd(3.0, 5.6) : rnd(2.0, 3.4)) * loaded,
+        grow: dusting ? 17 : 8.5,
+        dust: dusting ? 1 : 0,
+        t: 0, life: (dusting ? rnd(0.55, 1.05) : rnd(0.34, 0.58)) * loaded
+      });
+    }
+  }
+  for (let i=state.smoke.length-1; i>=0; i--){
+    const s = state.smoke[i];
+    s.t += dt;
+    if (s.t >= s.life){ state.smoke.splice(i,1); continue; }
+    s.x += s.vx*dt; s.y += s.vy*dt; s.r += (s.grow || 8.5)*dt;
+  }
+
   /* The three continuous sounds. The engine follows the speedo; the rumble
      strip and the grass follow where the car actually is. */
   const spd = clamp(state.speed / BASE_SPEED, 0, 1.4);
   Sfx.hold("engine", true, 0.075 + 0.065*spd, 0.58 + 0.72*spd);
   const onKerb = !offRoad && Math.abs(state.playerX) > 0.90;
-  Sfx.hold("kerb",  onKerb, 0.58, 0.85 + 0.35*spd);
-  Sfx.hold("verge", offRoad, 0.50, 0.80 + 0.40*spd);
+  Sfx.hold("kerb",  onKerb, 0.72, 0.85 + 0.35*spd);
+  Sfx.hold("verge", offRoad, 0.66, 0.80 + 0.40*spd);
 
   /* Cosmetic only. The body leans into the load so the 3D model has
      something to do. It does not affect where the car goes. */
@@ -1348,19 +1378,18 @@ function addLink(base){
      now, and the rungs drain so you can see it running out. */
   state.chainT = CHAIN_HOLD;
   const step = Math.min(state.chain-1, CHAIN_CAP);
-  const set  = CHAIN_SETS[CHAIN_SET];
-  if (Sfx.ready("chain1" + set.suffix)){
-    /* One note at a time. The alternate set rings for 1.4s and a quick chain
-       would otherwise stack five of them into a chord. */
+  if (Sfx.ready("chain1")){
+    /* One note at a time. These ring for 1.4s and a quick chain would
+       otherwise stack five of them into a chord. */
     Sfx.release(state.chainSrc, 0.16); state.chainSrc = null;
     // chain1..8 climb the ladder; past the octave it holds on chain_top
     state.chainSrc = (state.chain > CHAIN_CAP+1)
-      ? Sfx.play("chain_top" + set.suffix, set.topGain, set.rate)
-      : Sfx.play("chain" + (step+1) + set.suffix, set.gain, set.rate);
+      ? Sfx.play("chain_top", CHAIN_TOP_GAIN)
+      : Sfx.play("chain" + (step+1), CHAIN_GAIN);
   } else Audio8.note(step, state.chain > CHAIN_CAP+1);
   const gain = Math.round(base * Math.min(state.chain, 30));
   state.score += gain;
-  state.pop = { t:0.9, v:gain, col: chainColour(state.chain) };
+  state.pop = { t:0.9, v:gain };
 }
 
 function crash(mag){
@@ -1753,25 +1782,22 @@ function drawFinishLine(segs, baseIdx, horizon){
     ctx.fillStyle = "#20242c";
     ctx.font = Math.round(bh*0.20)+'px "LagunaPump", "Arial Black", sans-serif';
     ctx.fillText("WELCOME TO", sx, sy - ph + bh*0.26);
+    /* Fit the name to the board rather than hoping. The sign narrows as the
+       road curves and LAGUNA SECA was running off both ends of it. */
     ctx.fillStyle = "#c4241a";
-    ctx.font = Math.round(bh*0.46)+'px "LagunaPump", "Arial Black", sans-serif';
+    const room = (sw*2 + pw*2) * 0.88;
+    let fs = Math.round(bh*0.46);
+    ctx.font = fs+'px "LagunaPump", "Arial Black", sans-serif';
+    const wide = ctx.measureText("LAGUNA SECA").width;
+    if (wide > room){
+      fs = Math.max(4, Math.floor(fs * room / wide));
+      ctx.font = fs+'px "LagunaPump", "Arial Black", sans-serif';
+    }
     ctx.fillText("LAGUNA SECA", sx, sy - ph + bh*0.64);
   }
-  // Kalinka, at the verge, tail going
-  const kx = sx + u(1.5), ky = sy, kw = Math.max(2, u(0.16));
-  if (kw > 2){
-    const wag = Math.sin(state.musicT*9)*kw*0.5;
-    ctx.fillStyle="#e09a4a";
-    ctx.fillRect(kx-kw, ky-kw*1.5, kw*2, kw*1.0);
-    ctx.fillRect(kx+kw*0.7, ky-kw*2.1, kw*0.7, kw*0.9);
-    ctx.fillStyle="#c47a34";
-    ctx.fillRect(kx+kw*0.72, ky-kw*2.7, kw*0.22, kw*0.7);
-    ctx.fillRect(kx+kw*1.15, ky-kw*2.7, kw*0.22, kw*0.7);
-    ctx.fillRect(kx-kw*1.5+wag, ky-kw*1.9, kw*0.6, kw*0.22);
-    ctx.fillStyle="#fff2dc";
-    ctx.fillRect(kx-kw*0.9, ky-kw*0.5, kw*0.4, kw*0.5);
-    ctx.fillRect(kx+kw*0.4, ky-kw*0.5, kw*0.4, kw*0.5);
-  }
+  /* There was a Kalinka here, drawn at 1.5 road-widths out and scaled with
+     the segment, so as the line came at you she inflated into a two-storey
+     animal on the verge. Gone. */
 }
 
 /* Flat sprite, drawn straight on. The body shifts a little under load but
@@ -1780,7 +1806,10 @@ function drawTyreSmoke(){
   for (const s of state.smoke){
     const k = 1 - s.t/s.life;
     const r = Math.max(1, Math.round(s.r));
-    ctx.fillStyle = "rgba(232,228,218,"+(0.50*k*k).toFixed(3)+")";
+    // dust takes its colour from the ground it is being thrown off
+    ctx.fillStyle = s.dust
+      ? rgba(mixHex(pal("ground",0), "#e6c489", 0.74), (0.66*k*k).toFixed(3))
+      : "rgba(232,228,218,"+(0.50*k*k).toFixed(3)+")";
     ctx.fillRect(Math.round(s.x)-r, Math.round(s.y)-r, r*2, r*2);
   }
 }
@@ -1789,9 +1818,13 @@ function drawPlayerCar(){
   const bob = Math.sin(state.musicT*Math.PI/TICK)*0.5;
   const t   = state.lean*26;
   // in the outro the camera holds and the car drives away from it
-  const o  = state.mode === "outro" ? clamp(state.outroT/5.2, 0, 1) : 0;
-  const sh = 1 - o*0.93;
-  if (o > 0.985) return;
+  const o  = state.mode === "outro" ? clamp(state.outroT/5.0, 0, 1) : 0;
+  /* It shrinks to a bit over a third and fades out under the banner. Taking
+     it down to a three-pixel speck was never going to look like anything but
+     a bug, however correct the perspective was. */
+  const sh = 1 - o*0.62;
+  const fade = 1 - clamp((o - 0.62)/0.34, 0, 1);
+  if (fade <= 0.01) return;
   /* It recedes to the point the ROAD actually vanishes at, which render()
      works out each frame from the finish-line segment or the horizon. Aiming
      at a guessed fraction of the screen is what kept sending it into the sky
@@ -1802,6 +1835,7 @@ function drawPlayerCar(){
   const cy = Math.round(lerp(VH - 24, vy, o*o) + bob*sh);
   const w = 54, h = 30;
   ctx.save();
+  ctx.globalAlpha = fade;
   /* One transform for the whole car. It used to shrink w and h while every
      wheel, lamp cluster and number plate stayed a fixed pixel size, so driving
      away from the camera at the finish pulled the thing apart into a cloud of
@@ -1862,6 +1896,7 @@ function drawPlayerCar(){
   ctx.fillStyle="rgba(255,255,255,0.85)";
   ctx.fillRect(kx+1, ky+2, 1, 1);
   ctx.fillRect(kx+5, ky+2, 1, 1);
+  ctx.globalAlpha = 1;
   ctx.restore();
 }
 
@@ -2194,7 +2229,7 @@ function weatherPass(horizon){
          came out on the same side. */
       if (f < 0.75){
         const bead = 1-f;
-        const side = state.moonX > 0 ? 0 : Math.PI;
+        const side = state.moonX < 0 ? 0 : Math.PI;
         for (let i=0;i<5;i++){
           const a0 = -0.5 + i*0.25 + side;
           ctx.fillStyle="rgba(255,255,240,"+(bead*0.9).toFixed(2)+")";
@@ -2263,18 +2298,12 @@ function drawHUD(){
     ctx.fillRect(6+i*7, VH-8, 5, 4);
   }
 
-  if (state.setNote > 0){
-    state.setNote = Math.max(0, state.setNote - 1/60);
-    ctx.globalAlpha = clamp(state.setNote/0.4, 0, 1);
-    txt("CHAIN SET " + CHAIN_SETS[CHAIN_SET].id.toUpperCase(), VW/2, 78, "#7ad0ff", 8, "center");
-    ctx.globalAlpha = 1;
-  }
-
   if (state.pop){
     // sits just above the roof, out of the road, in the chain's own colour
     const k = 1 - clamp(state.pop.t/0.9, 0, 1);
     ctx.globalAlpha = clamp(state.pop.t/0.35, 0, 1);
-    txt("+"+state.pop.v, VW/2, VH-72 - k*10, state.pop.col || "#fff8d4", 10, "center");
+    // always green: red hanging over your own roof reads as a warning
+    txt("+"+state.pop.v, VW/2, VH-72 - k*10, "#7cff9a", 10, "center");
     ctx.globalAlpha = 1;
   }
 }
@@ -2503,12 +2532,6 @@ addEventListener("keydown", e=>{
   if (e.key === "r" || e.key === "R"){ e.preventDefault(); retry(); }
   if (e.key === "c" || e.key === "C") state.crt = !state.crt;
   if (e.key === "m" || e.key === "M") Audio8.clickOn = !Audio8.clickOn;
-  if (e.key === "n" || e.key === "N"){                 // swap the chain ladder
-    CHAIN_SET = (CHAIN_SET + 1) % CHAIN_SETS.length;
-    state.setNote = 1.6;
-    Sfx.play("chain5" + CHAIN_SETS[CHAIN_SET].suffix,
-             CHAIN_SETS[CHAIN_SET].gain, CHAIN_SETS[CHAIN_SET].rate);
-  }
 });
 addEventListener("keyup", e=>{ if (keymap[e.key]){ input[keymap[e.key]] = false; e.preventDefault(); } });
 
@@ -2608,7 +2631,8 @@ addEventListener("mouseup",        e=>pointer(e,false));
 /* ---- high score board ---- */
 if (LEADERBOARD_ENABLED && window.Leaderboard){
   Leaderboard.init("liebezeit", {
-    screen: ".screen-viewport", accent: "#ff2a12", prize: false,
+    screen: ".screen-viewport", accent: "#ff2a12", prize: true,
+    prizeText: "Highest score between 10pm on 17 August and 10pm on 31 August wins. Add your email to claim it if you win.",
     onReplay: function(){ Audio8.init(); Leaderboard.onGameStart(); startRun(); }
   });
 }
