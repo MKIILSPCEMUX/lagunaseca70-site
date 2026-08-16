@@ -48,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.5.0 · 10 Aug";
+const VERSION      = "v1.6.0 · 10 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -56,7 +56,13 @@ const AUDIO_OFFSET = 0.046;
 const SEGLEN       = 200;
 const SEGS_PER_BAR = 196;           // nominal ground covered in one bar
 const ROAD_W       = 2000;
-const RUMBLE_LEN   = 3;
+const RUMBLE_LEN   = 6;          // band length: 3 strobed at about 7Hz
+const FINISH_STOP  = SEGLEN*13;  // where the camera parks, short of the line
+const DASH_LEN     = 6;          // lane paint: on for this many, off for this many
+/* How far the dark band is allowed to sit from the light one. At full
+   separation the ground and tarmac strobed hard enough to be unpleasant
+   to look at; the bands still read as motion at a third of it. */
+const BAND_DEPTH   = 0.34;
 const DRAW_DIST    = 240;
 const CAM_HEIGHT   = 820;           // lower camera reads faster
 const FOV          = 108;
@@ -260,7 +266,7 @@ const W_WET     = [[1,0.0],[28,0.0],[31,1.0],[37,1.0],[43,0.6],[49,0.0],[96,0.0]
    way it came in. Coverage still drives the darkness; this drives the
    moon, and it only goes one way: in from the left, sits over the sun for
    the dark bars, then out to the right. */
-const MOON_X    = [[1,-3.4],[49,-2.6],[61,0],[68,0],[72,2.6],[96,3.4]];
+const MOON_X    = [[1,3.4],[49,2.6],[61,0],[68,0],[72,-2.6],[96,-3.4]];
 
 /* The three fork strikes, placed on the synth lasers rather than thrown
    at random. Written as bar.beat.sixteenth, all counted from one, so
@@ -335,8 +341,19 @@ const lerp  = (a,b,t)=> a + (b-a)*t;
 const smooth= t => t*t*(3-2*t);
 const rnd   = (a,b)=> a + Math.random()*(b-a);
 
+/* pal() hands back "#rrggbb" when a section is settled and "rgb(r,g,b)" while
+   one is crossfading into the next. Anything that wants to mix or fade a
+   palette colour has to cope with both, or it works for most of a run and
+   falls over for one bar at every section change. */
 function hex(c){
-  return [parseInt(c.substr(1,2),16),parseInt(c.substr(3,2),16),parseInt(c.substr(5,2),16)];
+  if (c[0] === "#")
+    return [parseInt(c.substr(1,2),16),parseInt(c.substr(3,2),16),parseInt(c.substr(5,2),16)];
+  const m = c.match(/-?\d+/g) || [0,0,0];
+  return [+m[0], +m[1], +m[2]];
+}
+function rgba(c, a){
+  const A = hex(c);
+  return "rgba("+A[0]+","+A[1]+","+A[2]+","+a+")";
 }
 function mixHexRaw(a,b,t){
   const A=hex(a),B=hex(b);
@@ -504,12 +521,17 @@ const Audio8 = {
 /* Mike's masters stay in audio/sfx/ as 4.7MB of wav. What the browser
    downloads is this: the same set at 490KB, in audio/fx/. */
 const SFX_DIR   = "audio/fx/";
+/* An octave up, and quieter. The ladder was recorded low and sat too heavy
+   under the track. chain_top keeps its own pitch: it is the payoff. */
+const CHAIN_OCTAVE = 2.0;
+const CHAIN_GAIN   = 0.34;
+const CHAIN_HOLD   = 4.6;
 const SFX_FILES = {
   engine:"engine.wav", kerb:"kerb.wav", verge:"verge.wav",
   chain1:"chain1.mp3", chain2:"chain2.mp3", chain3:"chain3.mp3", chain4:"chain4.mp3",
   chain5:"chain5.mp3", chain6:"chain6.mp3", chain7:"chain7.mp3", chain8:"chain8.mp3",
   chain_top:"chain_top.mp3", chain_break:"chain_break.mp3",
-  pass:"pass.mp3", hit:"hit.mp3", timeout:"timeout.mp3",
+  pass:"pass.mp3", hit:"hit.mp3", timeout:"timeout.mp3", skid:"skid.mp3",
   finish:"finish.mp3", start:"start.mp3"
 };
 
@@ -574,14 +596,14 @@ const Sfx = {
 
   ready(k){ return !!this.buf[k]; },
 
-  play(k, gain, rate){
+  play(k, gain, rate, delay){
     if (!this.ctx || !this.buf[k]) return null;
     const src = this.ctx.createBufferSource();
     src.buffer = this.buf[k];
     src.playbackRate.value = rate || 1;
     const g = this.ctx.createGain(); g.gain.value = gain === undefined ? 0.8 : gain;
     src.connect(g); g.connect(this.bus);
-    src.start(this.ctx.currentTime, this.head[k] || 0);
+    src.start(this.ctx.currentTime + (delay || 0), this.head[k] || 0);
     src.__g = g;
     return src;
   },
@@ -636,14 +658,14 @@ const state = {
   section:SECTIONS[0], prevSection:SECTIONS[0], blend:1,
   bar:1, musicT:0,
   position:0, playerX:0, speed:0, throttle:1,
-  lean:0, finishAt:0, steerNow:0, timeAdd:0, timeAddV:0,
+  lean:0, finishAt:0, steerNow:0, timeAdd:0, timeAddV:0, ridge:null, vanishY:0, vanishX:0,
   segments:[], genCurve:0, genY:0, genBar:0,
   barStart:[], roadBarCursor:1,
   scenery:[], traffic:[], meteors:[], fxQueue:[],
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
   banner:0, bannerSec:null, cue:"", cueT:0, outroT:0,
-  paused:false, wet:0, smoke:[], smokeT:0, startSrc:null,
+  paused:false, wet:0, smoke:[], smokeT:0, startSrc:null, skidT:0, lastSteer:0,
   light:0.5, eclipse:0, moonX:-3.4, night:false,
   bolt:null, boltT:0, boltIx:0, nextBolt:0, flashT:0, rain:0, chill:1, cloud:0, traffic_mul:1, city:0, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
@@ -663,6 +685,11 @@ function pushSegment(y1, y2, curve){
     p1:{ world:{y:y1, z:i*SEGLEN},     camera:{}, screen:{} },
     p2:{ world:{y:y2, z:(i+1)*SEGLEN}, camera:{}, screen:{} },
     colour:(Math.floor(i/RUMBLE_LEN) % 2) ? "dark" : "light",
+    /* Dashes used to be drawn only on light segments, so the markings turned
+       on and off with the banding and the two patterns read as one flicker.
+       They now run on their own count, offset half a band, so they straddle
+       the joins the way paint on a real road does. */
+    dash:(Math.floor((i + RUMBLE_LEN/2)/DASH_LEN) % 2) === 0,
     clip:0
   });
 }
@@ -827,7 +854,10 @@ function update(dt){
     // put the line five seconds of music ahead, so you drive through it
     state.finishAt = state.position + state.speed * 4.6;
   }
-  if (state.finishAt && state.position > state.finishAt){ finish(); return; }
+  /* Stop the camera SHORT of the banner rather than under it. It used to run
+     until the line was past the lens, which left the banner behind you for the
+     whole outro. FINISH_STOP is the gap it holds. */
+  if (state.finishAt && state.position > state.finishAt - FINISH_STOP){ finish(); return; }
 
   if (bar !== state.bar){
     state.bar = bar;
@@ -900,6 +930,15 @@ function update(dt){
   state.steerNow = steer;
   state.playerX += steer * STEER_RATE * dt * clamp(speedPct, 0.6, 1.0);
 
+  /* A chirp of lost traction on turn-in: once per press, not while held,
+     and only when there is speed to lose. */
+  state.skidT = Math.max(0, state.skidT - dt);
+  if (steer !== 0 && state.lastSteer === 0 && speedPct > 0.4 && state.skidT <= 0){
+    state.skidT = 0.22;
+    Sfx.play("skid", 0.5, 0.96 + Math.random()*0.10);
+  }
+  state.lastSteer = steer;
+
   /* Tyre smoke. Screen-space puffs off the rear wheels while the wheel is
      turned and there is speed to scrub. They drift outward and down the
      screen, which is the world moving past, and swell as they thin out. */
@@ -936,7 +975,7 @@ function update(dt){
   const spd = clamp(state.speed / BASE_SPEED, 0, 1.4);
   Sfx.hold("engine", true, 0.15 + 0.13*spd, 0.58 + 0.72*spd);
   const onKerb = !offRoad && Math.abs(state.playerX) > 0.90;
-  Sfx.hold("kerb",  onKerb, 0.30, 0.85 + 0.35*spd);
+  Sfx.hold("kerb",  onKerb, 0.42, 0.85 + 0.35*spd);
   Sfx.hold("verge", offRoad, 0.34, 0.80 + 0.40*spd);
 
   /* Cosmetic only. The body leans into the load so the 3D model has
@@ -983,7 +1022,7 @@ function update(dt){
         const tPass = dzc / closing;
         if (tPass > 0 && tPass <= Sfx.passLead && Sfx.live < 2){
           c.armed = true; Sfx.live++;
-          c.passSrc = Sfx.play("pass", 0.5);
+          c.passSrc = Sfx.play("pass", 0.85);
           if (c.passSrc) c.passSrc.onended = () => { Sfx.live = Math.max(0, Sfx.live-1); };
           else Sfx.live = Math.max(0, Sfx.live-1);
         }
@@ -1023,7 +1062,7 @@ function update(dt){
   state.chainT = Math.max(0, state.chainT - dt);
   state.timeAdd = Math.max(0, state.timeAdd - dt);
   if (state.chainT <= 0 && state.chain){
-    if (state.chain > 2) Sfx.play("chain_break", 0.42);
+    if (state.chain > 2) Sfx.play("chain_break", 0.34);
     state.bestChain=Math.max(state.bestChain,state.chain); state.chain = 0;
   }
   if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
@@ -1036,12 +1075,15 @@ function update(dt){
 
 function addLink(base){
   state.chain++;
-  state.chainT = 3.2;
+  /* The chain also lapses on its own if you go this long without threading
+     anything, which is what makes it feel like it broke for no reason. Longer
+     now, and the rungs drain so you can see it running out. */
+  state.chainT = CHAIN_HOLD;
   const step = Math.min(state.chain-1, CHAIN_CAP);
   if (Sfx.ready("chain1")){
     // chain1..8 climb the ladder; past the octave it holds on chain_top
-    if (state.chain > CHAIN_CAP+1) Sfx.play("chain_top", 0.62);
-    else                          Sfx.play("chain" + (step+1), 0.68);
+    if (state.chain > CHAIN_CAP+1) Sfx.play("chain_top", CHAIN_GAIN*1.25);
+    else                          Sfx.play("chain" + (step+1), CHAIN_GAIN, CHAIN_OCTAVE);
   } else Audio8.note(step, state.chain > CHAIN_CAP+1);
   const gain = Math.round(base * Math.min(state.chain, 30));
   state.score += gain;
@@ -1049,8 +1091,10 @@ function addLink(base){
 }
 
 function crash(mag){
-  if (state.chain > 2) Sfx.play("chain_break", 0.6);
-  Sfx.play("hit", clamp(0.5 + 0.45*mag, 0, 1));
+  /* The impact reads first and the chain breaking answers it. Both at once
+     was one muddled noise. */
+  Sfx.play("hit", clamp(0.20 + 0.20*mag, 0, 1));
+  if (state.chain > 2) Sfx.play("chain_break", 0.46, 1, 0.28);
   // a whoosh already in the air belongs to a pass that is not going to happen
   for (const c of state.traffic){ if (c.passSrc){ Sfx.release(c.passSrc, 0.08); c.passSrc = null; } }
   state.bestChain = Math.max(state.bestChain, state.chain);
@@ -1081,6 +1125,7 @@ function startRun(){
   state.smoke.length=0; state.smokeT=0; state.wet=0;
   Sfx.release(state.startSrc, 0.35); state.startSrc = null;   // the key turn is done
   Sfx.live = 0;                                              // no whooshes owed from last time
+  state.skidT=0; state.lastSteer=0;
   state.bolt=null; state.boltT=0; state.boltIx=0; state.nextBolt=0; state.flashT=0;
   state.fxQueue.length=0; state.nextTick=0; state.lastTick=-1; state.timeLeft=34; state.score=0; state.chain=0; state.chainT=0; state.bestChain=0; state.pop=null;
   state.crashT=0; state.shake=0; state.banner=0;
@@ -1183,7 +1228,10 @@ function drawSky(horizon){
   /* Cumulus with flat bottoms and hard edges, drifting at different rates.
      A few are always there so the sky has depth even on a clear day; the
      weather curve adds more and darkens them into nimbus when it rains. */
-  const nClouds = 3 + Math.round(state.cloud*5);
+  /* Clouds thin out and go as the eclipse closes in. A cloudy sky under a
+     total eclipse reads as a mistake, and they were sitting over the corona. */
+  const clear   = 1 - clamp(state.eclipse*1.6, 0, 1);
+  const nClouds = Math.round((3 + Math.round(state.cloud*5)) * clear);
   for (let i=0;i<nClouds;i++){
     const seedY = 0.20 + ((i*0.173) % 0.52);
     const y  = Math.round(h*seedY);
@@ -1294,6 +1342,9 @@ function drawMountains(horizon, parallax){
              + 8*Math.sin(t*0.091+0.4) + 4*Math.sin(t*0.213+2.9);
     pts.push([x, Math.round(horizon - hh)]);
   }
+  /* Keep the ridge: the eclipse overlay draws stars on top of everything and
+     needs to know where the sky stops, or they come out over the rock. */
+  state.ridge = pts;
   ctx.fillStyle = pal("mtn");
   ctx.beginPath(); ctx.moveTo(-20, horizon+2);
   for (const [x,y] of pts) ctx.lineTo(x,y);
@@ -1456,9 +1507,14 @@ function drawPlayerCar(){
   const o  = state.mode === "outro" ? clamp(state.outroT/5.2, 0, 1) : 0;
   const sh = 1 - o*0.93;
   if (o > 0.985) return;
-  const cx = Math.round(VW/2 + state.lean*16*sh + (state.shake ? rnd(-state.shake,state.shake) : 0));
-  // it recedes towards the vanishing point, not up into the sky
-  const cy = Math.round(lerp(VH - 24, VH*0.455, o*o) + bob*sh);
+  /* It recedes to the point the ROAD actually vanishes at, which render()
+     works out each frame from the finish-line segment or the horizon. Aiming
+     at a guessed fraction of the screen is what kept sending it into the sky
+     on a crest or a dip. */
+  const vy = state.vanishY || VH*0.46, vx = state.vanishX || VW/2;
+  const cx = Math.round(lerp(VW/2 + state.lean*16*sh, vx, o*o)
+                        + (state.shake ? rnd(-state.shake,state.shake) : 0));
+  const cy = Math.round(lerp(VH - 24, vy, o*o) + bob*sh);
   const w = 54, h = 30;
   ctx.save();
   /* One transform for the whole car. It used to shrink w and h while every
@@ -1602,14 +1658,15 @@ function render(){
   for (let i=drawn.length-1; i>=0; i--){
     const s = drawn[i];
     const dark = s.colour === "dark";
-    const gcol = pal("ground", dark?1:0);
+    // the kerb keeps its red and white; the ground and tarmac only hint at it
+    const gcol = dark ? mixHex(pal("ground",0), pal("ground",1), BAND_DEPTH) : pal("ground",0);
+    const dcol = dark ? mixHex(pal("road",0),   pal("road",1),   BAND_DEPTH) : pal("road",0);
     const rcol = pal("rumble", dark?1:0);
-    const dcol = pal("road",   dark?1:0);
     const p1 = s.p1.screen, p2 = s.p2.screen;
     ctx.fillStyle = gcol; ctx.fillRect(0, p2.y, VW, p1.y - p2.y + 1);
     quad(ctx, p1.x, p1.y, p1.w*1.24, p2.x, p2.y, p2.w*1.24, rcol);
     quad(ctx, p1.x, p1.y, p1.w,      p2.x, p2.y, p2.w,      dcol);
-    if (!dark){
+    if (s.dash){
       const lw1 = p1.w/22, lw2 = p2.w/22;
       for (const lane of [-0.34, 0.34]){
         quad(ctx, p1.x + p1.w*lane*2, p1.y, lw1,
@@ -1617,6 +1674,20 @@ function render(){
       }
     }
     if (state.wet > 0.02) drawPuddle(s, p1, p2);
+  }
+
+  /* Distance haze. The road used to run to a hard edge at the horizon with
+     every band still at full strength, which flattened the picture and made
+     the furthest stripes the busiest thing on screen. A short fade into the
+     sky colour gives the far end somewhere to go. */
+  if (horizon > 0 && horizon < VH){
+    const hz = Math.min(34, VH*0.11);
+    const hg = ctx.createLinearGradient(0, horizon, 0, horizon + hz);
+    const hc = pal("haze");
+    hg.addColorStop(0, rgba(hc, 0.72));
+    hg.addColorStop(1, rgba(hc, 0));
+    ctx.fillStyle = hg;
+    ctx.fillRect(0, horizon, VW, hz);
   }
 
   /* sprites, far to near */
@@ -1643,7 +1714,20 @@ function render(){
     }
   }
 
-  if (state.finishAt) drawFinishLine(segs, baseIdx, horizon);
+  /* Where the car is heading. The finish-line segment if we can see it,
+     otherwise the horizon: either way a real screen position rather than a
+     guess. */
+  state.vanishY = Math.max(4, horizon - 2);
+  state.vanishX = VW/2;
+  if (state.finishAt){
+    const fn = Math.floor(state.finishAt/SEGLEN) - baseIdx;
+    const fs = (fn > 0 && fn < DRAW_DIST) ? segs[baseIdx + fn] : null;
+    if (fs && fs.p1.screen.scale){
+      state.vanishY = Math.max(4, fs.p1.screen.y - 3);
+      state.vanishX = fs.p1.screen.x;
+    }
+    drawFinishLine(segs, baseIdx, horizon);
+  }
   if (state.night) drawHeadlights(horizon);
   drawTyreSmoke();
   drawPlayerCar();
@@ -1753,17 +1837,24 @@ function weatherPass(horizon){
     hg.addColorStop(1,"rgba(255,146,66,"+(0.38*t).toFixed(3)+")");
     ctx.fillStyle=hg; ctx.fillRect(0, Math.max(0,horizon-30), VW, 34);
 
-    // stars, bright enough to read through the dark
+    // stars, bright enough to read through the dark, and only above the ridge
+    const ridge = state.ridge;
+    const ridgeAt = x => {
+      if (!ridge || !ridge.length) return horizon;
+      const i = clamp(Math.round((x + 20)/4), 0, ridge.length-1);
+      return ridge[i][1];
+    };
     for (const st of state.stars){
       const y = st.y*Math.max(1,horizon);
-      if (y > horizon-2) continue;
+      const sx0 = Math.round(st.x*VW);
+      if (y > ridgeAt(sx0) - 2) continue;
       const tw = 0.65 + 0.35*Math.sin(now*3.4 + st.b*30);
       ctx.fillStyle = "rgba(255,253,244,"+(t*st.b*tw).toFixed(3)+")";
-      ctx.fillRect(Math.round(st.x*VW), Math.round(y), 1, 1);
+      ctx.fillRect(sx0, Math.round(y), 1, 1);
       if (st.b > 0.86){
         ctx.fillStyle = "rgba(255,253,244,"+(t*0.5*tw).toFixed(3)+")";
-        ctx.fillRect(Math.round(st.x*VW)-1, Math.round(y), 3, 1);
-        ctx.fillRect(Math.round(st.x*VW), Math.round(y)-1, 1, 3);
+        ctx.fillRect(sx0-1, Math.round(y), 3, 1);
+        ctx.fillRect(sx0, Math.round(y)-1, 1, 3);
       }
     }
 
@@ -1806,7 +1897,7 @@ function weatherPass(horizon){
          came out on the same side. */
       if (f < 0.75){
         const bead = 1-f;
-        const side = state.moonX < 0 ? 0 : Math.PI;
+        const side = state.moonX > 0 ? 0 : Math.PI;
         for (let i=0;i<5;i++){
           const a0 = -0.5 + i*0.25 + side;
           ctx.fillStyle="rgba(255,255,240,"+(bead*0.9).toFixed(2)+")";
@@ -1851,13 +1942,23 @@ function drawHUD(){
 
   // the chain, as a row of rungs under the score, each rung its own heat
   const rungs = Math.min(state.chain, CHAIN_CAP+1);
+  /* The rungs drain from the left as the hold runs down. The chain lapses on
+     its own after CHAIN_HOLD without a pass, which felt like it broke for no
+     reason when there was nothing on screen saying so. */
+  const held = state.chain ? clamp(state.chainT / CHAIN_HOLD, 0, 1) : 0;
   for (let i=0;i<CHAIN_CAP+1;i++){
-    ctx.fillStyle = i < rungs ? chainColour(i+1) : "rgba(255,255,255,.13)";
+    const on = i < rungs;
+    const spent = on && (i+1) > Math.ceil(rungs * held);
+    ctx.fillStyle = !on ? "rgba(255,255,255,.13)"
+                  : spent ? "rgba(255,255,255,.22)" : chainColour(i+1);
     ctx.fillRect(VW-6-(CHAIN_CAP-i)*8 - 6, 31, 6, 4);
   }
   if (state.chain > 1) txt("x"+state.chain, VW-6, 38, chainColour(state.chain), 9, "right");
 
-  const kph = Math.round(state.speed/BASE_SPEED * 300);
+  /* OutRun topped out at 293 km/h and that is the number people remember, so
+     the dial is scaled to reach it at full throttle rather than running on to
+     an arcade-implausible 400. */
+  const kph = Math.round(state.speed / (BASE_SPEED*THROTTLE_MAX) * 293);
   txt(kph+" km/h", 6, VH-20, "#ffe066", 9);
   const bars = 12, lit = Math.round(clamp((state.throttle-THROTTLE_MIN)/(THROTTLE_MAX-THROTTLE_MIN),0,1)*bars);
   for (let i=0;i<bars;i++){
