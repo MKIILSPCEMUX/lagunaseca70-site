@@ -15,3 +15,10 @@ social-preview.png
 
 # Dev note, not site content
 HIGH-SCORES-SETUP.md
+
+# SFX masters. The browser loads the compressed set in liebezeit/audio/fx/;
+# these are the 4.7MB of wav they were made from and nobody needs to download
+# them. Same for the 16MB background photo and the 320k master of the track.
+liebezeit/audio/sfx/
+liebezeit/IMG_9869_C.png
+Liebezeit_MP3.mp3

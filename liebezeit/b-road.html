@@ -48,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.4.0 · 10 Aug";
+const VERSION      = "v1.5.0 · 10 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -383,6 +383,8 @@ const Audio8 = {
     const d = this.noise.getChannelData(0);
     for (let i=0;i<n;i++) d[i] = Math.random()*2-1;
 
+    Sfx.attach(this.ctx);
+
     this.el = new Audio();
     this.el.src = AUDIO_SRC;
     this.el.preload = "auto";
@@ -479,6 +481,153 @@ const Audio8 = {
   }
 };
 
+
+/* ============================================================
+   SFX — Mike's recordings
+
+   Three of these are continuous (engine, kerb, verge) and stay as small
+   lossless WAVs, because a lossy loop ticks once every cycle. The rest are
+   one-shots and are mp3, which cuts the set from 4.7MB to under half a meg.
+
+   Two things are measured from the audio itself at load rather than typed in
+   as constants, so swapping a file in just works:
+
+     HEAD  every decoded buffer is scanned for its first audible sample. That
+           absorbs both the silence Mike left at the top and the priming delay
+           an mp3 decoder adds, so a one-shot fires exactly when asked.
+
+     SYNC  pass.wav has to START BEFORE the overtake, because the moment the
+           sound drops away is the moment you go past. The drop is found by
+           walking back from the loudest point to the last frame still near
+           it, and that offset becomes the lead time.
+   ============================================================ */
+/* Mike's masters stay in audio/sfx/ as 4.7MB of wav. What the browser
+   downloads is this: the same set at 490KB, in audio/fx/. */
+const SFX_DIR   = "audio/fx/";
+const SFX_FILES = {
+  engine:"engine.wav", kerb:"kerb.wav", verge:"verge.wav",
+  chain1:"chain1.mp3", chain2:"chain2.mp3", chain3:"chain3.mp3", chain4:"chain4.mp3",
+  chain5:"chain5.mp3", chain6:"chain6.mp3", chain7:"chain7.mp3", chain8:"chain8.mp3",
+  chain_top:"chain_top.mp3", chain_break:"chain_break.mp3",
+  pass:"pass.mp3", hit:"hit.mp3", timeout:"timeout.mp3",
+  finish:"finish.mp3", start:"start.mp3"
+};
+
+const Sfx = {
+  bytes:{}, buf:{}, head:{}, loops:{}, bus:null, ctx:null,
+  /* Mike measured the drop in pass.wav at 0.90s. The automatic reading lands
+     a shade before that, so it is nudged onto his figure. */
+  passLead:0.85, passTrim:0.06, live:0,
+
+  /* Bytes first, with no audio context in sight: this can run the moment the
+     page loads, long before the browser will let us make any noise. */
+  prefetch(){
+    for (const k in SFX_FILES){
+      fetch(SFX_DIR + SFX_FILES[k]).then(r => r.ok ? r.arrayBuffer() : null)
+        .then(b => { if (b) this.bytes[k] = b; if (this.ctx) this.decode(k); })
+        .catch(()=>{});
+    }
+  },
+
+  attach(ctx){
+    if (this.ctx) return;
+    this.ctx = ctx;
+    this.bus = ctx.createGain(); this.bus.gain.value = 1; this.bus.connect(ctx.destination);
+    for (const k in this.bytes) this.decode(k);
+  },
+
+  decode(k){
+    const b = this.bytes[k]; if (!b || this.buf[k]) return;
+    delete this.bytes[k];
+    this.ctx.decodeAudioData(b, buffer => {
+      this.buf[k] = buffer;
+      this.head[k] = this.firstSound(buffer);
+      if (k === "pass") this.passLead = this.dropPoint(buffer) - this.head[k] + this.passTrim;
+    }, ()=>{});
+  },
+
+  /* first sample above a floor, so nothing fires late */
+  firstSound(b){
+    const d = b.getChannelData(0), step = 32;
+    let peak = 0;
+    for (let i=0;i<d.length;i+=step) { const v = Math.abs(d[i]); if (v > peak) peak = v; }
+    const floor = Math.max(0.004, peak*0.02);
+    for (let i=0;i<d.length;i+=step) if (Math.abs(d[i]) > floor) return Math.max(0, (i-step)/b.sampleRate);
+    return 0;
+  },
+
+  /* the last moment the sound is still near its loudest: for a whoosh, the
+     instant it starts falling away, which is the instant you go past */
+  dropPoint(b){
+    const d = b.getChannelData(0), win = Math.round(b.sampleRate*0.02);
+    let best = 0, bestI = 0;
+    const rms = [];
+    for (let i=0;i+win<d.length;i+=win){
+      let s = 0; for (let j=i;j<i+win;j++) s += d[j]*d[j];
+      const r = Math.sqrt(s/win); rms.push(r);
+      if (r > best){ best = r; bestI = rms.length-1; }
+    }
+    let k = bestI;
+    while (k+1 < rms.length && rms[k+1] > best*0.82) k++;
+    return (k+1)*win / b.sampleRate;
+  },
+
+  ready(k){ return !!this.buf[k]; },
+
+  play(k, gain, rate){
+    if (!this.ctx || !this.buf[k]) return null;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.buf[k];
+    src.playbackRate.value = rate || 1;
+    const g = this.ctx.createGain(); g.gain.value = gain === undefined ? 0.8 : gain;
+    src.connect(g); g.connect(this.bus);
+    src.start(this.ctx.currentTime, this.head[k] || 0);
+    src.__g = g;
+    return src;
+  },
+
+  /* fade a one-shot out rather than cutting it, so stopping never clicks */
+  release(src, secs){
+    if (!src || !this.ctx) return;
+    const t = this.ctx.currentTime, s = secs || 0.12;
+    try { src.__g.gain.setTargetAtTime(0.0001, t, s/3); src.stop(t + s); } catch(e){}
+  },
+
+  /* a loop that can be leaned on every frame: gain and rate glide */
+  hold(k, on, gain, rate){
+    if (!this.ctx || !this.buf[k]) return;
+    let L = this.loops[k];
+    if (on && !L){
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.buf[k]; src.loop = true;
+      src.loopStart = this.head[k] || 0;
+      src.loopEnd   = this.buf[k].duration;
+      const g = this.ctx.createGain(); g.gain.value = 0;
+      src.connect(g); g.connect(this.bus);
+      src.start(this.ctx.currentTime, src.loopStart);
+      L = this.loops[k] = { src, g };
+    }
+    if (!L) return;
+    const t = this.ctx.currentTime;
+    L.g.gain.setTargetAtTime(on ? gain : 0, t, 0.05);
+    if (rate) L.src.playbackRate.setTargetAtTime(rate, t, 0.06);
+    if (!on && L.g.gain.value < 0.0015){
+      try { L.src.stop(t + 0.1); } catch(e){}
+      delete this.loops[k];
+    }
+  },
+
+  silence(){
+    this.live = 0;
+    for (const k in this.loops){
+      try { this.loops[k].g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.04);
+            this.loops[k].src.stop(this.ctx.currentTime + 0.25); } catch(e){}
+      delete this.loops[k];
+    }
+  }
+};
+Sfx.prefetch();
+
 /* ============================================================
    STATE
    ============================================================ */
@@ -494,7 +643,7 @@ const state = {
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
   banner:0, bannerSec:null, cue:"", cueT:0, outroT:0,
-  paused:false, wet:0, smoke:[], smokeT:0,
+  paused:false, wet:0, smoke:[], smokeT:0, startSrc:null,
   light:0.5, eclipse:0, moonX:-3.4, night:false,
   bolt:null, boltT:0, boltIx:0, nextBolt:0, flashT:0, rain:0, chill:1, cloud:0, traffic_mul:1, city:0, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
@@ -651,6 +800,10 @@ function update(dt){
     state.speed *= (1 - 0.55*dt);
     state.shake = Math.max(0, state.shake - dt*4);
     if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
+    // the engine goes with the car: away, then gone
+    const away = clamp(state.outroT/4.6, 0, 1);
+    Sfx.hold("engine", away < 1, 0.14*(1-away), 0.58 + 0.72*clamp(state.speed/BASE_SPEED,0,1.4));
+    Sfx.hold("kerb", false, 0); Sfx.hold("verge", false, 0);
     if (state.outroT > 6.5){
       state.mode = "finish";
       if (typeof LEADERBOARD_ENABLED !== "undefined" && LEADERBOARD_ENABLED && window.Leaderboard)
@@ -660,6 +813,7 @@ function update(dt){
   }
   if (state.mode !== "play"){
     state.banner = Math.max(0, state.banner - dt);
+    Sfx.hold("engine", false, 0); Sfx.hold("kerb", false, 0); Sfx.hold("verge", false, 0);
     return;
   }
 
@@ -771,10 +925,19 @@ function update(dt){
   state.playerX -= pSeg.curve * dz * CENTRIFUGAL;
   state.playerX = clamp(state.playerX, -3.2, 3.2);
 
-  if (Math.abs(state.playerX) > 1.05){
+  const offRoad = Math.abs(state.playerX) > 1.05;
+  if (offRoad){
     state.speed *= (1 - 1.6*dt);
     state.shake  = Math.max(state.shake, 1.2);
   }
+
+  /* The three continuous sounds. The engine follows the speedo; the rumble
+     strip and the grass follow where the car actually is. */
+  const spd = clamp(state.speed / BASE_SPEED, 0, 1.4);
+  Sfx.hold("engine", true, 0.15 + 0.13*spd, 0.58 + 0.72*spd);
+  const onKerb = !offRoad && Math.abs(state.playerX) > 0.90;
+  Sfx.hold("kerb",  onKerb, 0.30, 0.85 + 0.35*spd);
+  Sfx.hold("verge", offRoad, 0.34, 0.80 + 0.40*spd);
 
   /* Cosmetic only. The body leans into the load so the 3D model has
      something to do. It does not affect where the car goes. */
@@ -808,6 +971,25 @@ function update(dt){
     }
     const dzc = c.z - (state.position + PLAYER_Z);
     const dx  = Math.abs(c.offset - state.playerX);
+
+    /* Arm the whoosh early. The sound peaks and falls away Sfx.passLead
+       seconds in, and that fall is the overtake, so it has to be started
+       that far before the car is level with you. Only for cars close enough
+       across the road to be worth hearing, and never more than two at once
+       or the road turns to mush. */
+    if (!c.armed && dx < 1.05){
+      const closing = state.speed - c.speed;
+      if (closing > 0){
+        const tPass = dzc / closing;
+        if (tPass > 0 && tPass <= Sfx.passLead && Sfx.live < 2){
+          c.armed = true; Sfx.live++;
+          c.passSrc = Sfx.play("pass", 0.5);
+          if (c.passSrc) c.passSrc.onended = () => { Sfx.live = Math.max(0, Sfx.live-1); };
+          else Sfx.live = Math.max(0, Sfx.live-1);
+        }
+      }
+    }
+
     if (Math.abs(dzc) < CAR_HALF_Z && dx < CAR_HALF_W * 2){
       if (!c.bumped){ c.bumped = true; crash(1.0); }
     } else if (Math.abs(dzc) < SEGLEN*2.5 && dx < 0.80 && dx > CAR_HALF_W*2 && !c.near){
@@ -840,7 +1022,10 @@ function update(dt){
   state.shake      = Math.max(0, state.shake - dt*4);
   state.chainT = Math.max(0, state.chainT - dt);
   state.timeAdd = Math.max(0, state.timeAdd - dt);
-  if (state.chainT <= 0 && state.chain){ state.bestChain=Math.max(state.bestChain,state.chain); state.chain = 0; }
+  if (state.chainT <= 0 && state.chain){
+    if (state.chain > 2) Sfx.play("chain_break", 0.42);
+    state.bestChain=Math.max(state.bestChain,state.chain); state.chain = 0;
+  }
   if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
   state.banner     = Math.max(0, state.banner - dt);
 
@@ -853,13 +1038,21 @@ function addLink(base){
   state.chain++;
   state.chainT = 3.2;
   const step = Math.min(state.chain-1, CHAIN_CAP);
-  Audio8.note(step, state.chain > CHAIN_CAP+1);
+  if (Sfx.ready("chain1")){
+    // chain1..8 climb the ladder; past the octave it holds on chain_top
+    if (state.chain > CHAIN_CAP+1) Sfx.play("chain_top", 0.62);
+    else                          Sfx.play("chain" + (step+1), 0.68);
+  } else Audio8.note(step, state.chain > CHAIN_CAP+1);
   const gain = Math.round(base * Math.min(state.chain, 30));
   state.score += gain;
   state.pop = { t:0.9, v:gain, col: chainColour(state.chain) };
 }
 
 function crash(mag){
+  if (state.chain > 2) Sfx.play("chain_break", 0.6);
+  Sfx.play("hit", clamp(0.5 + 0.45*mag, 0, 1));
+  // a whoosh already in the air belongs to a pass that is not going to happen
+  for (const c of state.traffic){ if (c.passSrc){ Sfx.release(c.passSrc, 0.08); c.passSrc = null; } }
   state.bestChain = Math.max(state.bestChain, state.chain);
   state.chain = 0; state.chainT = 0;
   state.crashT = 0.45*mag;
@@ -867,11 +1060,12 @@ function crash(mag){
   state.hitFlash = 1;
   state.score = Math.max(0, state.score - 400*mag);
   state.timeLeft = Math.max(0, state.timeLeft - 2.5*mag);
-  if (Audio8.ctx) Audio8.hit(Audio8.ctx.currentTime, 0.25, 0.35, 300);
 }
-function gameOver(){ state.mode = "over"; Audio8.stop(); }
+function gameOver(){ state.mode = "over"; Audio8.stop();
+  Sfx.silence(); Sfx.play("timeout", 0.8); }
 function finish(){
   state.mode = "outro"; state.outroT = 0;
+  Sfx.play("finish", 0.75);
   state.bestChain = Math.max(state.bestChain, state.chain);
 }
 
@@ -885,6 +1079,8 @@ function startRun(){
   state.barStart.length=0; state.roadBarCursor=1;
   state.scenery.length=0; state.traffic.length=0; state.meteors.length=0;
   state.smoke.length=0; state.smokeT=0; state.wet=0;
+  Sfx.release(state.startSrc, 0.35); state.startSrc = null;   // the key turn is done
+  Sfx.live = 0;                                              // no whooshes owed from last time
   state.bolt=null; state.boltT=0; state.boltIx=0; state.nextBolt=0; state.flashT=0;
   state.fxQueue.length=0; state.nextTick=0; state.lastTick=-1; state.timeLeft=34; state.score=0; state.chain=0; state.chainT=0; state.bestChain=0; state.pop=null;
   state.crashT=0; state.shake=0; state.banner=0;
@@ -1940,6 +2136,28 @@ function resize(){
   out.style.height = out.height + "px";
 }
 addEventListener("resize", resize); resize();
+
+/* start.wav is Mike's own car turning over, and it belongs to the title
+   screen. No browser will make a sound before you have touched the page, so
+   it goes off on the first real gesture: a click anywhere on the cabinet
+   plays it in full, and if that gesture is the one that starts a run then
+   startRun fades it out under the music, which turns it into an ignition. */
+(function armIgnition(){
+  const fire = () => {
+    Audio8.init();
+    if (Audio8.ctx.state === "suspended") Audio8.ctx.resume();
+    if (state.mode === "title" && !state.startSrc) state.startSrc = Sfx.play("start", 0.5);
+  };
+  const once = () => { stop(); fire(); };
+  const stop = () => { for (const e of ["pointerdown","keydown","touchstart"])
+                         removeEventListener(e, once, true); };
+  for (const e of ["pointerdown","keydown","touchstart"]) addEventListener(e, once, true);
+  // if the browser already trusts this site, no gesture is needed
+  try {
+    Audio8.init();
+    if (Audio8.ctx.state === "running") setTimeout(() => { stop(); fire(); }, 350);
+  } catch(e){}
+})();
 
 /* Pull the face in before the first title frame, so the wordmark does not
    flash up in Arial Black and then swap. */
