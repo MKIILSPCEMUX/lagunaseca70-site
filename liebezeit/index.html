@@ -236,7 +236,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.7.1</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.8.0</div>
       </div>
 
       <div class="bezel">
@@ -271,7 +271,7 @@
       <div class="hull-foot">
         <span class="foot-play">Arrows steer &middot; up down throttle</span>
         <span class="foot-play">Traffic Dodger</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.7.1</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.8.0</span>
       </div>
     </div>
   </div>
@@ -303,7 +303,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.7.1 · 10 Aug";
+const VERSION      = "v1.8.0 · 10 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -799,7 +799,6 @@ const SFX_FILES = {
   chain1a:"chain1a.mp3", chain2a:"chain2a.mp3", chain3a:"chain3a.mp3", chain4a:"chain4a.mp3",
   chain5a:"chain5a.mp3", chain6a:"chain6a.mp3", chain7a:"chain7a.mp3", chain8a:"chain8a.mp3",
   chain_topa:"chain_topa.mp3",
-  chain_break:"chain_break.mp3",
   pass:"pass.mp3", hit:"hit.mp3", timeout:"timeout.mp3", skid:"skid.mp3",
   finish:"finish.mp3", start:"start.mp3"
 };
@@ -1245,8 +1244,8 @@ function update(dt){
   const spd = clamp(state.speed / BASE_SPEED, 0, 1.4);
   Sfx.hold("engine", true, 0.075 + 0.065*spd, 0.58 + 0.72*spd);
   const onKerb = !offRoad && Math.abs(state.playerX) > 0.90;
-  Sfx.hold("kerb",  onKerb, 0.42, 0.85 + 0.35*spd);
-  Sfx.hold("verge", offRoad, 0.34, 0.80 + 0.40*spd);
+  Sfx.hold("kerb",  onKerb, 0.58, 0.85 + 0.35*spd);
+  Sfx.hold("verge", offRoad, 0.50, 0.80 + 0.40*spd);
 
   /* Cosmetic only. The body leans into the load so the 3D model has
      something to do. It does not affect where the car goes. */
@@ -1332,7 +1331,6 @@ function update(dt){
   state.chainT = Math.max(0, state.chainT - dt);
   state.timeAdd = Math.max(0, state.timeAdd - dt);
   if (state.chainT <= 0 && state.chain){
-    if (state.chain > 1) Sfx.play("chain_break", 0.5);
     state.bestChain=Math.max(state.bestChain,state.chain); state.chain = 0;
   }
   if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
@@ -1369,10 +1367,6 @@ function crash(mag){
   /* The impact reads first and the chain breaking answers it. Both at once
      was one muddled noise. */
   Sfx.play("hit", clamp(0.42 + 0.32*mag, 0, 1));
-  /* This wanted a chain above two, so most crashes never triggered it, and at
-     0.46 against a hit five times louder in RMS you would not have caught the
-     ones that did. Any chain worth the name now breaks audibly. */
-  if (state.chain > 1) Sfx.play("chain_break", 0.85, 1, 0.26);
   // a whoosh already in the air belongs to a pass that is not going to happen
   for (const c of state.traffic){ if (c.passSrc){ Sfx.release(c.passSrc, 0.08); c.passSrc = null; } }
   state.bestChain = Math.max(state.bestChain, state.chain);
@@ -1840,7 +1834,9 @@ function drawPlayerCar(){
   if (input.down){ ctx.fillStyle="#ff5a3c";
     ctx.fillRect(cx-w/2+4, cy-h+21, 8, 6); ctx.fillRect(cx+w/2-12, cy-h+21, 8, 6); }
 
-  box(cx-13, cy-4, 26, 8, "#f0d84a");                       // plate
+  /* SECA 900 at 6px is about 29px of monospace and the plate was 26, so both
+     ends ran off onto the bodywork and it read ECA 90. */
+  box(cx-17, cy-4, 34, 8, "#f0d84a");                       // plate
   ctx.fillStyle="#20242c"; ctx.font="bold 6px ui-monospace, monospace";
   ctx.textAlign="center"; ctx.textBaseline="top";
   ctx.fillText("SECA 900", cx, cy-3);
@@ -1849,13 +1845,23 @@ function drawPlayerCar(){
   const gy = cy-h-3, lean = -state.lean*9;
   ctx.fillStyle="#c8a074"; ctx.fillRect(cx-w*0.26+t+lean, gy, 8, 9);
   ctx.fillStyle="#3a2a1e"; ctx.fillRect(cx-w*0.26+t+lean, gy, 8, 3);
-  ctx.fillStyle="#e09a4a"; ctx.fillRect(cx+w*0.13+t+lean, gy+1, 8, 8);
+  /* Kalinka is turned round, watching the road behind. That was already the
+     intent, but two black pixels on a plain block is not a face; she now has
+     a muzzle and a nose so it reads as a dog rather than a smudge. */
+  const kx = cx+w*0.13+t+lean, ky = gy+1;
+  ctx.fillStyle="#e09a4a"; ctx.fillRect(kx, ky, 8, 8);
   ctx.fillStyle="#c47a34";
-  ctx.fillRect(cx+w*0.13+t+lean,   gy-1, 2, 3);
-  ctx.fillRect(cx+w*0.13+t+lean+6, gy-1, 2, 3);
-  ctx.fillStyle="#000";
-  ctx.fillRect(cx+w*0.13+t+lean+2, gy+3, 1, 1);
-  ctx.fillRect(cx+w*0.13+t+lean+5, gy+3, 1, 1);
+  ctx.fillRect(kx,   ky-2, 2, 3);                     // ears
+  ctx.fillRect(kx+6, ky-2, 2, 3);
+  ctx.fillRect(kx, ky, 8, 2);                         // darker crown
+  ctx.fillStyle="#fff2dc"; ctx.fillRect(kx+2, ky+4, 4, 4);   // muzzle
+  ctx.fillStyle="#1a1208";
+  ctx.fillRect(kx+1, ky+2, 2, 2);                     // eyes
+  ctx.fillRect(kx+5, ky+2, 2, 2);
+  ctx.fillRect(kx+3, ky+4, 2, 2);                     // nose
+  ctx.fillStyle="rgba(255,255,255,0.85)";
+  ctx.fillRect(kx+1, ky+2, 1, 1);
+  ctx.fillRect(kx+5, ky+2, 1, 1);
   ctx.restore();
 }
 
@@ -2388,9 +2394,13 @@ function drawOverlayScreen(){
 function drawPaused(){
   ctx.fillStyle = "rgba(6,4,12,0.62)"; ctx.fillRect(0,0,VW,VH);
   TXT_FACE = FACE_DISPLAY;
-  txt("PAUSED", VW/2, VH/2 - 26, "#ffe066", 26, "center");
-  txt("SPACE OR TAP THE SCREEN", VW/2, VH/2 + 10, "#f4f0e4", 8, "center");
-  txt("TO CARRY ON",             VW/2, VH/2 + 24, "#f4f0e4", 8, "center");
+  txt("PAUSED", VW/2, VH/2 - 32, "#ffe066", 23, "center");
+  txt("TAP ANYWHERE TO CARRY ON", VW/2, VH/2 + 4, "#f4f0e4", 8, "center");
+  const b = PAUSE_RETRY;
+  ctx.fillStyle = "#c4241a"; ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.strokeStyle = "#f4f0e4"; ctx.lineWidth = 2;
+  ctx.strokeRect(b.x+1, b.y+1, b.w-2, b.h-2);
+  txt("RETRY", VW/2, b.y + 7, "#fff4e2", 11, "center");
   TXT_FACE = FACE_MONO;
 }
 
@@ -2490,6 +2500,7 @@ const keymap = {
 addEventListener("keydown", e=>{
   if (keymap[e.key]){ input[keymap[e.key]] = true; e.preventDefault(); }
   if (e.key === " "){ e.preventDefault(); if (!togglePause()) advance(); }
+  if (e.key === "r" || e.key === "R"){ e.preventDefault(); retry(); }
   if (e.key === "c" || e.key === "C") state.crt = !state.crt;
   if (e.key === "m" || e.key === "M") Audio8.clickOn = !Audio8.clickOn;
   if (e.key === "n" || e.key === "N"){                 // swap the chain ladder
@@ -2510,10 +2521,26 @@ function togglePause(){
   return true;
 }
 
+/* Start again from wherever you are: mid-run, paused, or on an end screen. */
+function retry(){
+  if (state.mode === "title"){ advance(); return; }
+  state.paused = false;
+  Audio8.letGo();
+  Sfx.silence();
+  if (typeof LEADERBOARD_ENABLED !== "undefined" && LEADERBOARD_ENABLED && window.Leaderboard)
+    { Leaderboard.hideScreen(); Leaderboard.onGameStart(); }
+  Audio8.init();
+  if (LEADERBOARD_ENABLED && window.Leaderboard) Leaderboard.onGameStart();
+  startRun();
+}
+
+/* The retry button on the pause card, in buffer coordinates. Touch has no
+   keyboard, so pausing is how a phone gets at it: the card is the menu. */
+const PAUSE_RETRY = { x: VW/2 - 42, y: VH/2 + 44, w: 84, h: 24 };
+
 function advance(){
   if (state.mode === "play") return;
   Audio8.init();
-  if (LEADERBOARD_ENABLED && window.Leaderboard) Leaderboard.onGameStart();
   startRun();
 }
 /* The screen itself is no longer a control. Steering by where your thumb
@@ -2523,6 +2550,17 @@ function pointer(e, down){
   e.preventDefault();
   if (!down) return;
   if (state.mode !== "play"){ advance(); return; }
+  /* While paused the screen is a two-button menu: the RETRY box starts again,
+     anywhere else carries on. It has to be hit deliberately, because a stray
+     tap that threw away a good run would be unforgivable. */
+  if (state.paused){
+    const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+    const r = out.getBoundingClientRect();
+    const bx = (t.clientX - r.left) / r.width  * VW;
+    const by = (t.clientY - r.top)  / r.height * VH;
+    if (bx >= PAUSE_RETRY.x && bx <= PAUSE_RETRY.x + PAUSE_RETRY.w &&
+        by >= PAUSE_RETRY.y && by <= PAUSE_RETRY.y + PAUSE_RETRY.h){ retry(); return; }
+  }
   togglePause();
 }
 out.addEventListener("touchstart", e=>pointer(e,true), {passive:false});
