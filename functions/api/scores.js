@@ -18,11 +18,27 @@
  *   BUTTONDOWN_API_KEY  (secret)        — no longer used (opt-in is client-side embed)
  */
 
-const GAMES = ['darkstar', 'sneca'];
+const GAMES = ['darkstar', 'sneca', 'liebezeit'];
 // Plausible ceilings. Dark Star's track loops, so a marathon run can pile up;
 // the real anti-cheat is the time-gate below (which scales with the score), so
 // this just blocks absurd values. Sneca is grid-capped so it stays small.
-const CAP = { darkstar: 100000, sneca: 700 };
+// Liebezeit: a plain autopilot that only steers for the freest lane clears
+// 420,000 over the 96 bars, so the ceiling has to sit well clear of that.
+const CAP = { darkstar: 100000, sneca: 700, liebezeit: 2000000 };
+
+/* The 'too fast' gate: a run that produced this score cannot have been shorter
+   than min + score/rate. rate is the fastest points per second any honest run
+   could manage, set generously, because a false rejection costs a real player
+   their score while a determined faker can simply wait anyway.
+
+   This was one hardcoded rule, age >= 2000 + score*12, which is 83 points per
+   second. Right for Dark Star, absurd for Liebezeit, where a 400k run would
+   have had to last eighty minutes. */
+const GATE = {
+  darkstar:  { min: 2000, rate: 83.34 },
+  sneca:     { min: 2000, rate: 83.34 },
+  liebezeit: { min: 8000, rate: 6000  },
+};
 const PAD = 7;                                    // width for the sortable inverse-score key
 const DEFAULT_CLOSE = '2026-08-14T19:00:00Z';     // 8pm UK time (BST) on Fri 14 Aug 2026; override with COMPETITION_CLOSE
 
@@ -63,7 +79,17 @@ function playSecret(env) {
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
-  const game = (url.searchParams.get('game') || 'darkstar').toLowerCase();
+  /* GET carries the game in the query string; POST carries it in the body.
+     Reading the query only meant EVERY submission was validated as darkstar
+     whatever game sent it: Liebezeit scores were bounced against Dark Star's
+     cap, Sneca's play token failed its signature because tokens are signed per
+     game, and entries landed under entry:darkstar:. The client now sends it
+     both ways, and so does this. */
+  let body = null;
+  if (request.method === 'POST') {
+    try { body = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
+  }
+  const game = String((body && body.game) || url.searchParams.get('game') || 'darkstar').toLowerCase();
 
   if (!GAMES.includes(game)) return json({ error: 'unknown game' }, 400);
 
@@ -157,9 +183,6 @@ export async function onRequest(context) {
 
   if (request.method === 'POST') {
     // Board stays open to new scores even after the prize closes.
-    let body;
-    try { body = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
-
     // initials: exactly three letters
     const initials = String(body.initials || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
     if (initials.length !== 3) return json({ error: 'initials must be three letters' }, 400);
@@ -180,7 +203,8 @@ export async function onRequest(context) {
     if (!safeEq(tp[2], expectSig)) return json({ error: 'bad play token' }, 403);
     const age = Date.now() - iat;
     if (!(age >= 0 && age < 6 * 3600 * 1000)) return json({ error: 'token expired' }, 403);
-    if (age < 2000 + score * 12) return json({ error: 'too fast' }, 403);
+    const gate = GATE[game] || { min: 2000, rate: 83.34 };
+    if (age < gate.min + (score / gate.rate) * 1000) return json({ error: 'too fast' }, 403);
     const usedKey = 'used:' + tp[1];
     if (await env.SCORES.get(usedKey)) return json({ error: 'token already used' }, 409);
     await env.SCORES.put(usedKey, '1', { expirationTtl: 21600 });
