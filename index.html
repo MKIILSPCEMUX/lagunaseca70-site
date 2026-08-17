@@ -8,14 +8,14 @@
 
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Laguna Seca" />
-  <meta property="og:description" content="A little arcade by Laguna Seca. Play The Dark Star and Laguna Sneca, two mini games locked to the beat." />
+  <meta property="og:description" content="A little arcade by Laguna Seca. Play Liebezeit, The Dark Star and Laguna Sneca, three mini games locked to the beat." />
   <meta property="og:url" content="https://lagunaseca70.com/" />
   <meta property="og:image" content="https://lagunaseca70.com/social-preview.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Laguna Seca" />
-  <meta name="twitter:description" content="A little arcade by Laguna Seca. Play The Dark Star and Laguna Sneca, two mini games locked to the beat." />
+  <meta name="twitter:description" content="A little arcade by Laguna Seca. Play Liebezeit, The Dark Star and Laguna Sneca, three mini games locked to the beat." />
   <meta name="twitter:image" content="https://lagunaseca70.com/social-preview.jpg" />
 
   <style>
@@ -26,6 +26,7 @@
       --green: #48d86b;
       --pink: #ff3a7f;
       --purple: #2a1147;
+      --red: #ff4a2a;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { min-height: 100%; }
@@ -113,6 +114,20 @@
       margin-top: 9px; font-size: 10px; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase;
     }
 
+    /* Liebezeit card. The thumb is a frame of the game's own title screen
+       rather than a logo, because the car under the streetlamp says what the
+       game is faster than the word Liebezeit does. */
+    .card.liebezeit .thumb { background: #06080d; padding: 0; }
+    .card.liebezeit .thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .card.liebezeit:hover { border-color: rgba(255, 74, 42, 0.6); box-shadow: 0 14px 34px rgba(0,0,0,0.5), 0 0 22px rgba(255,74,42,0.24); }
+    .card.liebezeit .card-play { color: var(--red); }
+    .badge {
+      display: inline-block; vertical-align: 3px; margin-left: 8px;
+      padding: 2px 7px 1px; border-radius: 20px;
+      font-size: 9px; font-weight: 800; letter-spacing: 0.16em;
+      background: var(--red); color: #12060a;
+    }
+
     /* Dark Star card */
     .card.darkstar .thumb { background: linear-gradient(160deg, #0b2011, #04070c); }
     .card.darkstar:hover { border-color: rgba(72, 216, 107, 0.6); box-shadow: 0 14px 34px rgba(0,0,0,0.5), 0 0 22px rgba(72,216,107,0.22); }
@@ -133,6 +148,16 @@
        don't sit there as one gold block. */
     .card.record.otempo:hover { border-color: rgba(122, 208, 255, 0.6); box-shadow: 0 14px 34px rgba(0,0,0,0.5), 0 0 22px rgba(122,208,255,0.22); }
     .card.record.otempo .card-play { color: #7ad0ff; }
+
+    /* One line about the competition. It was on the Liebezeit card and it
+       wrapped to two lines on a phone, which made the card look untidy for
+       the sake of nineteen words. */
+    .notice {
+      margin-top: 16px; text-align: center;
+      font-size: 10.5px; letter-spacing: 0.06em; line-height: 1.7;
+      color: var(--dim);
+    }
+    .notice b { color: var(--red); font-weight: 800; }
 
     .foot {
       margin-top: 28px; text-align: center;
@@ -167,6 +192,15 @@
     </div>
 
     <div class="cards">
+      <a class="card liebezeit" href="/liebezeit/">
+        <div class="thumb"><img src="/liebezeit/liebezeit-thumb.png" alt="Liebezeit" /></div>
+        <div class="card-body">
+          <div class="card-name">Liebezeit<span class="badge">New</span></div>
+          <div class="card-tag">Traffic dodger &middot; 85 BPM</div>
+          <div class="card-play">Play &#9654;</div>
+        </div>
+      </a>
+
       <a class="card darkstar" href="/darkstar/">
         <div class="thumb"><img src="/darkstar/img/darkstar_title.png" alt="The Dark Star" /></div>
         <div class="card-body">
@@ -203,6 +237,8 @@
         </div>
       </a>
     </div>
+
+    <div class="notice">Top score on <b>Liebezeit</b> before 10pm on 31 August wins.</div>
 
     <div class="foot">
       <div class="signup-label">Join the Laguna Seca mailing list</div>

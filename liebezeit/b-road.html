@@ -48,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.9.0 · 16 Aug";
+const VERSION      = "v1.10.0 · 17 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -249,7 +249,12 @@ function makeBolt(){
 /* The breakdown thins the road out but should never empty it, and the road
    has to be full again by the time the drums land on 69. Refilling starts at
    65 and is done by 68, which gives the cars a bar to actually arrive in. */
-const W_TRAFFIC = [[1,1.0],[50,1.0],[56,0.60],[61,0.38],[65,0.38],[68,1.20],[74,1.15],[96,1.0]];
+/* The first eight bars are nearly empty on purpose. The chain sounds are a
+   melodic ladder and they need the track underneath them before they start
+   climbing, so there is one car on the road until bar 8 and the traffic fills
+   in over the five bars after that. The clock is not affected: time comes from
+   the section checkpoints, not from overtakes. */
+const W_TRAFFIC = [[1,0.10],[8,0.16],[13,1.0],[50,1.0],[56,0.60],[61,0.38],[65,0.38],[68,1.20],[74,1.15],[96,1.0]];
 const W_CHILL   = [[1,0.55],[5,0.38],[9,0.12],[13,0.0],[96,0.0]];
 const W_DUST    = [[1,0.0],[15,0.0],[18,1.0],[24,1.0],[28,0.0],[96,0.0]];
 const W_CLOUD   = [[1,0.0],[23,0.0],[27,1.0],[33,1.0],[40,0.35],[47,0.0],[96,0.0]];
@@ -676,7 +681,7 @@ const state = {
   bolt:null, boltT:0, boltIx:0, nextBolt:0, flashT:0, rain:0, chill:1, cloud:0, traffic_mul:1, city:0, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
   hitFlash:0, snareFlash:0, kickFlash:0, chain:0, chainT:0, pop:null, bestChain:0,
-  crt:false, stars:[]
+  crt:true, stars:[]
 };
 for (let i=0;i<340;i++) state.stars.push({x:Math.random(), y:Math.random()*0.92,
   b:0.30 + Math.pow(Math.random(),1.7)*0.70});
@@ -2169,35 +2174,37 @@ function drawPaused(){
   TXT_FACE = FACE_MONO;
 }
 
-/* ---- CRT / VHS post pass ---------------------------------------
-   Everything happens at 320x224 and gets upscaled ONCE. Cheaper by two
-   orders of magnitude than compositing at output size, and a scanline
-   per source row is what a real board would have done anyway. */
+/* ---- CRT: a static window, nothing that moves --------------------
+   The old pass had a rolling VHS tracking band and a grain sheet that
+   reshuffled every other frame. Both read as damage rather than as a
+   television, and on a picture this clean they were the only thing your
+   eye went to. What is left is baked into one canvas and drawn once a
+   frame: a scanline on every other row, a slightly darker column every
+   third, and a corner vignette. Because it is built at 224x320 and
+   upscaled with the picture, the lines land as fat blocks rather than
+   hairlines, which is the point.
+
+   CRT_LEVEL scales the whole thing. 0.6 is a hint, 1.0 is as shipped,
+   1.4 is a tired monitor in a pub. Press C to compare against no mask
+   at all. */
+const CRT_LEVEL = 1.0;
 const crtCv = document.createElement("canvas"); crtCv.width=VW; crtCv.height=VH;
 const cctx = crtCv.getContext("2d");
-let scanCv = null, grainSheets = [], grainIx = 0, vigCv = null;
+let maskCv = null;
 
-function buildScanlines(){
-  scanCv = document.createElement("canvas"); scanCv.width=VW; scanCv.height=VH;
-  const c = scanCv.getContext("2d");
-  c.fillStyle = "rgba(0,0,0,0.13)";
+function buildMask(){
+  maskCv = document.createElement("canvas"); maskCv.width=VW; maskCv.height=VH;
+  const c = maskCv.getContext("2d");
+  c.fillStyle = "rgba(0,0,0,"+(0.155*CRT_LEVEL).toFixed(3)+")";
   for (let y=1; y<VH; y+=2) c.fillRect(0, y, VW, 1);
-}
-function buildGrain(){
-  grainSheets = [];
-  for (let k=0;k<4;k++){
-    const c = document.createElement("canvas"); c.width=VW; c.height=VH;
-    const x = c.getContext("2d");
-    for (let yy=0; yy<VH; yy+=96) for (let xx=0; xx<VW; xx+=96)
-      x.drawImage(noiseCv, xx + ((Math.random()*8)|0), yy + ((Math.random()*8)|0));
-    grainSheets.push(c);
-  }
-}
-function buildVignette(){
-  vigCv = document.createElement("canvas"); vigCv.width=VW; vigCv.height=VH;
-  const c = vigCv.getContext("2d");
-  const g = c.createRadialGradient(VW/2,VH/2,VH*0.40, VW/2,VH/2,VH*0.92);
-  g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(0,0,0,0.20)");
+  /* The grille. Every third column, and only a third as strong as the
+     scanlines, because a mask you can actually count the stripes in stops
+     being texture and starts being a fence. */
+  c.fillStyle = "rgba(0,0,0,"+(0.055*CRT_LEVEL).toFixed(3)+")";
+  for (let x=2; x<VW; x+=3) c.fillRect(x, 0, 1, VH);
+  const g = c.createRadialGradient(VW/2, VH*0.5, VH*0.36, VW/2, VH*0.5, VH*0.80);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,"+(0.30*CRT_LEVEL).toFixed(3)+")");
   c.fillStyle = g; c.fillRect(0,0,VW,VH);
 }
 
@@ -2206,48 +2213,36 @@ function present(){
   octx.imageSmoothingEnabled = false;
 
   if (!state.crt){ octx.drawImage(buf, 0,0,w,h); return; }
-  if (!scanCv) buildScanlines();
-  if (!grainSheets.length) buildGrain();
-  if (!vigCv) buildVignette();
+  if (!maskCv) buildMask();
 
   cctx.globalCompositeOperation = "source-over";
   cctx.globalAlpha = 1;
   cctx.imageSmoothingEnabled = false;
   cctx.drawImage(buf, 0, 0);
 
-  // chromatic split, one internal pixel each way
-  cctx.globalCompositeOperation = "lighter";
-  cctx.globalAlpha = 0.045;
-  cctx.drawImage(buf, -1, 0);
-  cctx.drawImage(buf,  1, 0);
-
-  // bloom off a quarter-res copy
+  /* A quarter-res copy added back on top. The mask costs about a tenth of
+     the picture's brightness overall, and this puts it back where it is
+     wanted, in the bright pixels, so the sun and the headlamps bloom
+     through the stripes instead of being flattened by them. The blacks
+     stay black because there is nothing there to add. */
   bctx.clearRect(0,0,bloom.width,bloom.height);
   bctx.drawImage(buf, 0,0,bloom.width,bloom.height);
-  cctx.globalAlpha = 0.09;
+  cctx.globalCompositeOperation = "lighter";
+  cctx.globalAlpha = 0.13 * CRT_LEVEL;
   cctx.imageSmoothingEnabled = true;
   cctx.drawImage(bloom, 0,0,VW,VH);
   cctx.imageSmoothingEnabled = false;
+
+  /* One internal pixel of chromatic split, static. A shadow mask never
+     lands perfectly and this is what stops the grid reading as graph
+     paper. It does not move, so it is not an artefact. */
+  cctx.globalAlpha = 0.035 * CRT_LEVEL;
+  cctx.drawImage(buf, -1, 0);
+  cctx.drawImage(buf,  1, 0);
+
   cctx.globalCompositeOperation = "source-over";
   cctx.globalAlpha = 1;
-
-  // VHS tracking band
-  const t = performance.now()/1000;
-  const bandY = Math.round((((t*0.16) % 1.5) - 0.25) * VH);
-  if (bandY > -14 && bandY < VH){
-    const bh = 9;
-    cctx.globalAlpha = 0.28;
-    cctx.drawImage(buf, 0, bandY, VW, bh, Math.round(Math.sin(t*9)*3), bandY, VW, bh);
-    cctx.globalAlpha = 0.10; cctx.fillStyle = "#d0e4ff";
-    cctx.fillRect(0, bandY, VW, bh);
-    cctx.globalAlpha = 1;
-  }
-
-  cctx.drawImage(scanCv, 0, 0);
-  cctx.globalAlpha = 0.022;
-  cctx.drawImage(grainSheets[(grainIx++) >> 1 & 3], 0, 0);
-  cctx.globalAlpha = 1;
-  cctx.drawImage(vigCv, 0, 0);
+  cctx.drawImage(maskCv, 0, 0);
 
   octx.drawImage(crtCv, 0, 0, w, h);
 }
