@@ -240,7 +240,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.12.0</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.12.1</div>
       </div>
 
       <div class="bezel">
@@ -275,7 +275,7 @@
       <div class="hull-foot">
         <span class="foot-play">Arrows steer &middot; up down throttle</span>
         <span class="foot-play">Traffic Dodger</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.12.0</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.12.1</span>
       </div>
     </div>
   </div>
@@ -307,7 +307,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.12.0 · 17 Aug";
+const VERSION      = "v1.12.1 · 17 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -1143,7 +1143,6 @@ function update(dt){
     for (let i=state.smoke.length-1; i>=0; i--){
       const sp = state.smoke[i]; sp.t += dt;
       if (sp.t >= sp.life){ state.smoke.splice(i,1); continue; }
-      if (sp.ay) sp.vy += sp.ay*dt;
       sp.x += sp.vx*dt; sp.y += sp.vy*dt; sp.r += (sp.grow || 8.5)*dt;
     }
     // the engine goes with the car: away, then gone
@@ -1273,20 +1272,22 @@ function update(dt){
      turned and there is speed to scrub. They drift outward and down the
      screen, which is the world moving past, and swell as they thin out. */
   state.smokeT -= dt;
-  /* Three kinds of puff off the same rear wheels, and never more than one
-     kind at a time. On dry tarmac it is a wisp of rubber smoke, and only when
-     you turn in hard enough to scrub. On the grass it is dust, which does not
-     wait for you to steer: the wheels throw it up the whole time you are out
-     there. In standing water it is spray, which likewise never stops. Water
-     leaves the tyre faster than dirt does and is gone sooner, so the spray is
-     smaller, quicker, thrown up rather than out, and short-lived. */
-  const KIND = { SMOKE:0, DUST:1, SPRAY:2 };
-  const kind = (offRoad && speedPct > 0.18)                        ? KIND.DUST
-             : (!offRoad && state.wet > 0.30 && speedPct > 0.22)   ? KIND.SPRAY
-             : (steer !== 0 && speedPct > 0.45)                    ? KIND.SMOKE
+  /* Two kinds of puff off the same rear wheels, and never both at once. On
+     tarmac it is a wisp of rubber smoke, and only when you turn in hard enough
+     to scrub. On the grass it is dust, which does not wait for you to steer:
+     the wheels throw it up the whole time you are out there.
+
+     There was a third for a day, spray off standing water in the rain bars.
+     Two plumes of pale particles either side of the car read as smoke however
+     they were coloured or shaped, and in the wet section, which is the busiest
+     part of the track, they were one thing too many. Removed rather than
+     tuned: the puddles already say the road is wet. */
+  const KIND = { SMOKE:0, DUST:1 };
+  const kind = (offRoad && speedPct > 0.18)     ? KIND.DUST
+             : (steer !== 0 && speedPct > 0.45) ? KIND.SMOKE
              : -1;
   if (kind >= 0 && state.smokeT <= 0){
-    state.smokeT = [0.038, 0.022, 0.034][kind];
+    state.smokeT = [0.038, 0.022][kind];
     for (const w of [-1, 1]) for (let n = 0, per = kind === KIND.SMOKE ? 1 : 2; n < per; n++){
       const p = { t:0, kind };
       if (kind === KIND.DUST){
@@ -1296,14 +1297,6 @@ function update(dt){
         p.vx = w*rnd(34, 62);               p.vy = rnd(-14, 4);
         p.r  = rnd(3.0, 5.6);               p.grow = 17;
         p.life = rnd(0.55, 1.05);
-      } else if (kind === KIND.SPRAY){
-        /* A rooster tail: up and out off the tyre, then falling back. ay is
-           what makes it arc instead of drifting, and the arc is the whole
-           reason it reads as water rather than as more dust. */
-        p.x = VW/2 + w*29 + rnd(-3,3);      p.y  = VH - 22 + rnd(-2,2);
-        p.vx = w*rnd(26, 58) - steer*18;    p.vy = rnd(-58, -26);
-        p.r  = rnd(2.2, 4.0);               p.grow = 13;   p.ay = 90;
-        p.life = rnd(0.34, 0.62);
       } else {
         /* rubber only really comes off the outside wheel */
         const loaded = (w === -Math.sign(steer)) ? 1 : 0.62;
@@ -1319,7 +1312,6 @@ function update(dt){
     const s = state.smoke[i];
     s.t += dt;
     if (s.t >= s.life){ state.smoke.splice(i,1); continue; }
-    if (s.ay) s.vy += s.ay*dt;
     s.x += s.vx*dt; s.y += s.vy*dt; s.r += (s.grow || 8.5)*dt;
   }
 
@@ -1851,13 +1843,10 @@ function drawTyreSmoke(){
   for (const s of state.smoke){
     const k = 1 - s.t/s.life;
     const r = Math.max(1, Math.round(s.r));
-    /* Dust takes its colour from the ground it is being thrown off. Spray is
-       a dull blue with a little of the tarmac mixed back in, so it reads as
-       water lifted off a wet road rather than as a light on its own. */
-    ctx.fillStyle =
-      s.kind === 1 ? rgba(mixHex(pal("ground",0), "#e6c489", 0.74), (0.66*k*k).toFixed(3)) :
-      s.kind === 2 ? rgba(mixHex("#7d9cbe", pal("road",0), 0.22),   (0.66*k).toFixed(3)) :
-                     "rgba(232,228,218,"+(0.50*k*k).toFixed(3)+")";
+    // dust takes its colour from the ground it is being thrown off
+    ctx.fillStyle = s.kind === 1
+      ? rgba(mixHex(pal("ground",0), "#e6c489", 0.74), (0.66*k*k).toFixed(3))
+      : "rgba(232,228,218,"+(0.50*k*k).toFixed(3)+")";
     ctx.fillRect(Math.round(s.x)-r, Math.round(s.y)-r, r*2, r*2);
   }
 }
