@@ -32,7 +32,8 @@ one in use. The manifest maps the code names onto them, so `chain1` loads
 
 ## Turning it off
 
-**S** mutes the effects and leaves the music playing. Every effect goes through
+**S** on a keyboard, or the **SFX ON / OFF** box under RETRY on the pause card
+if you are on a phone. Either mutes the effects and leaves the music playing. Every effect goes through
 one gain node, so muting is a single ramp rather than chasing down each loop,
 and the loops keep running silently so nothing has to be rebuilt when it comes
 back. The state is announced on screen and again on the pause card. S used to be

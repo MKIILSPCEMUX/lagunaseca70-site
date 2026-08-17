@@ -240,7 +240,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.11.0</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.12.0</div>
       </div>
 
       <div class="bezel">
@@ -275,7 +275,7 @@
       <div class="hull-foot">
         <span class="foot-play">Arrows steer &middot; up down throttle</span>
         <span class="foot-play">Traffic Dodger</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.11.0</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.12.0</span>
       </div>
     </div>
   </div>
@@ -307,7 +307,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.11.0 · 17 Aug";
+const VERSION      = "v1.12.0 · 17 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -320,13 +320,21 @@ const FINISH_BAR   = 93;         // the line lands on this downbeat
 const FINISH_T     = (FINISH_BAR-1) * BAR;
 const FINISH_STOP  = SEGLEN*13;  // where the camera parks, short of the line
 const DASH_LEN     = 6;          // lane paint: on for this many, off for this many
-/* How far the dark band sits from the light one, per surface. Back to full on
-   both: the tarmac banding is what carries speed and depth, and taking it out
+/* How much darker the dark band is than the light one, per surface. The
+   palettes carry a second colour for each, but the two are only about four
+   per cent apart, which at 224 pixels wide is nothing: the road read as one
+   flat grey and the game felt slower than it was. These knock the dark band
+   down by a proper margin on top of that. Length is what keeps it
+   comfortable, not weakness: RUMBLE_LEN of 5 puts the flicker near 4Hz where
+   3 put it near 7, which is the range that makes people feel ill.
+
+   Old note, kept because it is still true: the tarmac banding is what
+   carries speed and depth, and taking it out
    cost more than it saved. The comfort now comes from LENGTH instead, which
    halves the flicker rate without touching the contrast, and from the lane
    paint running on its own count rather than switching with the bands. */
-const BAND_GROUND  = 1.0;
-const BAND_ROAD    = 1.0;
+const BAND_GROUND  = 0.10;
+const BAND_ROAD    = 0.16;
 const DRAW_DIST    = 240;
 const CAM_HEIGHT   = 820;           // lower camera reads faster
 const FOV          = 108;
@@ -628,6 +636,11 @@ function mixHexRaw(a,b,t){
   const A=hex(a),B=hex(b);
   const h2=n=>Math.round(n).toString(16).padStart(2,"0");
   return "#"+h2(lerp(A[0],B[0],t))+h2(lerp(A[1],B[1],t))+h2(lerp(A[2],B[2],t));
+}
+/* multiply a colour down toward black: the dark half of a band */
+function shade(c, k){
+  const A = hex(c), m = 1 - k;
+  return "rgb("+Math.round(A[0]*m)+","+Math.round(A[1]*m)+","+Math.round(A[2]*m)+")";
 }
 function mixHex(a,b,t){
   const A=hex(a),B=hex(b);
@@ -952,7 +965,7 @@ const state = {
   bolt:null, boltT:0, boltIx:0, nextBolt:0, flashT:0, rain:0, chill:1, cloud:0, traffic_mul:1, city:0, dust:0, rainbow:0, rainDrops:[],
   nextCheckpointBar:0, checkpointFlash:0,
   hitFlash:0, snareFlash:0, kickFlash:0, chain:0, chainT:0, pop:null, bestChain:0,
-  crt:true, stars:[]
+  stars:[]
 };
 for (let i=0;i<340;i++) state.stars.push({x:Math.random(), y:Math.random()*0.92,
   b:0.30 + Math.pow(Math.random(),1.7)*0.70});
@@ -1491,15 +1504,6 @@ const out = document.getElementById("screen");
 const octx = out.getContext("2d");
 const buf = document.createElement("canvas"); buf.width=VW; buf.height=VH;
 const ctx = buf.getContext("2d", {alpha:false});
-const bloom = document.createElement("canvas"); bloom.width=VW>>2; bloom.height=VH>>2;
-const bctx = bloom.getContext("2d");
-const noiseCv = document.createElement("canvas"); noiseCv.width=96; noiseCv.height=96;
-(function(){
-  const nx = noiseCv.getContext("2d"), d = nx.createImageData(96,96);
-  for (let i=0;i<96*96;i++){ const v=(Math.random()*255)|0;
-    d.data[i*4]=v; d.data[i*4+1]=v; d.data[i*4+2]=v; d.data[i*4+3]=255; }
-  nx.putImageData(d,0,0);
-})();
 
 function project(p, camX, camY, camZ){
   p.camera.x = (p.world.x||0) - camX;
@@ -2035,8 +2039,8 @@ function render(){
     const s = drawn[i];
     const dark = s.colour === "dark";
     // the kerb keeps its red and white; the ground and tarmac only hint at it
-    const gcol = dark ? mixHex(pal("ground",0), pal("ground",1), BAND_GROUND) : pal("ground",0);
-    const dcol = dark ? mixHex(pal("road",0),   pal("road",1),   BAND_ROAD)   : pal("road",0);
+    const gcol = dark ? shade(pal("ground",1), BAND_GROUND) : pal("ground",0);
+    const dcol = dark ? shade(pal("road",1),   BAND_ROAD)   : pal("road",0);
     const rcol = pal("rumble", dark?1:0);
     const p1 = s.p1.screen, p2 = s.p2.screen;
     ctx.fillStyle = gcol; ctx.fillRect(0, p2.y, VW, p1.y - p2.y + 1);
@@ -2473,88 +2477,34 @@ function drawPaused(){
      the display face: LagunaPump is wide and this line ran off both edges.
      The last word is the state the sound is in, not what the key does. */
   TXT_FACE = FACE_MONO;
-  txt("R RETRY \u00b7 C SCREEN \u00b7 S SOUND " + (Sfx.muted ? "OFF" : "ON"),
-      VW/2, VH/2 + 22, "#b7ae9c", 7, "center");
+  txt("R RETRY \u00b7 S SOUND", VW/2, VH/2 + 22, "#b7ae9c", 7, "center");
   TXT_FACE = FACE_DISPLAY;
   const b = PAUSE_RETRY;
   ctx.fillStyle = "#c4241a"; ctx.fillRect(b.x, b.y, b.w, b.h);
   ctx.strokeStyle = "#f4f0e4"; ctx.lineWidth = 2;
   ctx.strokeRect(b.x+1, b.y+1, b.w-2, b.h-2);
   txt("RETRY", VW/2, b.y + 7, "#fff4e2", 11, "center");
+  /* The sound box is outlined rather than filled, so it reads as the lesser
+     of the two and nobody stabs it looking for RETRY. */
+  const q = PAUSE_SFX;
+  ctx.fillStyle = "rgba(20,16,12,0.55)"; ctx.fillRect(q.x, q.y, q.w, q.h);
+  ctx.strokeStyle = Sfx.muted ? "#b7ae9c" : "#7cff9a"; ctx.lineWidth = 2;
+  ctx.strokeRect(q.x+1, q.y+1, q.w-2, q.h-2);
+  txt(Sfx.muted ? "SFX OFF" : "SFX ON", VW/2, q.y + 6,
+      Sfx.muted ? "#b7ae9c" : "#7cff9a", 10, "center");
   TXT_FACE = FACE_MONO;
 }
 
-/* ---- CRT: a static window, nothing that moves --------------------
-   The old pass had a rolling VHS tracking band and a grain sheet that
-   reshuffled every other frame. Both read as damage rather than as a
-   television, and on a picture this clean they were the only thing your
-   eye went to. What is left is baked into one canvas and drawn once a
-   frame: a scanline on every other row, a slightly darker column every
-   third, and a corner vignette. Because it is built at 224x320 and
-   upscaled with the picture, the lines land as fat blocks rather than
-   hairlines, which is the point.
-
-   CRT_LEVEL scales the whole thing. 0.6 is a hint, 1.0 is as shipped,
-   1.4 is a tired monitor in a pub. Press C to compare against no mask
-   at all. */
-const CRT_LEVEL = 1.0;
-const crtCv = document.createElement("canvas"); crtCv.width=VW; crtCv.height=VH;
-const cctx = crtCv.getContext("2d");
-let maskCv = null;
-
-function buildMask(){
-  maskCv = document.createElement("canvas"); maskCv.width=VW; maskCv.height=VH;
-  const c = maskCv.getContext("2d");
-  c.fillStyle = "rgba(0,0,0,"+(0.155*CRT_LEVEL).toFixed(3)+")";
-  for (let y=1; y<VH; y+=2) c.fillRect(0, y, VW, 1);
-  /* The grille. Every third column, and only a third as strong as the
-     scanlines, because a mask you can actually count the stripes in stops
-     being texture and starts being a fence. */
-  c.fillStyle = "rgba(0,0,0,"+(0.055*CRT_LEVEL).toFixed(3)+")";
-  for (let x=2; x<VW; x+=3) c.fillRect(x, 0, 1, VH);
-  const g = c.createRadialGradient(VW/2, VH*0.5, VH*0.36, VW/2, VH*0.5, VH*0.80);
-  g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(0,0,0,"+(0.30*CRT_LEVEL).toFixed(3)+")");
-  c.fillStyle = g; c.fillRect(0,0,VW,VH);
-}
-
+/* ---- present -----------------------------------------------------
+   Everything is drawn at 224x320 and upscaled once. There was a CRT pass
+   here: scanlines, an aperture grille, a vignette, a static chromatic
+   split. It was well behaved and it added nothing. What carries speed on
+   this game is the banding on the tarmac, not a mask over the top of it,
+   and the mask was quietly costing a tenth of the picture's brightness
+   for the privilege. Gone, and with it the bloom canvas it fed on. */
 function present(){
-  const w = out.width, h = out.height;
   octx.imageSmoothingEnabled = false;
-
-  if (!state.crt){ octx.drawImage(buf, 0,0,w,h); return; }
-  if (!maskCv) buildMask();
-
-  cctx.globalCompositeOperation = "source-over";
-  cctx.globalAlpha = 1;
-  cctx.imageSmoothingEnabled = false;
-  cctx.drawImage(buf, 0, 0);
-
-  /* A quarter-res copy added back on top. The mask costs about a tenth of
-     the picture's brightness overall, and this puts it back where it is
-     wanted, in the bright pixels, so the sun and the headlamps bloom
-     through the stripes instead of being flattened by them. The blacks
-     stay black because there is nothing there to add. */
-  bctx.clearRect(0,0,bloom.width,bloom.height);
-  bctx.drawImage(buf, 0,0,bloom.width,bloom.height);
-  cctx.globalCompositeOperation = "lighter";
-  cctx.globalAlpha = 0.13 * CRT_LEVEL;
-  cctx.imageSmoothingEnabled = true;
-  cctx.drawImage(bloom, 0,0,VW,VH);
-  cctx.imageSmoothingEnabled = false;
-
-  /* One internal pixel of chromatic split, static. A shadow mask never
-     lands perfectly and this is what stops the grid reading as graph
-     paper. It does not move, so it is not an artefact. */
-  cctx.globalAlpha = 0.035 * CRT_LEVEL;
-  cctx.drawImage(buf, -1, 0);
-  cctx.drawImage(buf,  1, 0);
-
-  cctx.globalCompositeOperation = "source-over";
-  cctx.globalAlpha = 1;
-  cctx.drawImage(maskCv, 0, 0);
-
-  octx.drawImage(crtCv, 0, 0, w, h);
+  octx.drawImage(buf, 0, 0, out.width, out.height);
 }
 
 /* ============================================================
@@ -2574,7 +2524,6 @@ addEventListener("keydown", e=>{
   if (keymap[e.key]){ input[keymap[e.key]] = true; e.preventDefault(); }
   if (e.key === " "){ e.preventDefault(); if (!togglePause()) advance(); }
   if (e.key === "r" || e.key === "R"){ e.preventDefault(); retry(); }
-  if (e.key === "c" || e.key === "C") state.crt = !state.crt;
   if (e.key === "s" || e.key === "S"){ Sfx.mute(!Sfx.muted); state.sfxMsg = 1.4; }
   if (e.key === "m" || e.key === "M") Audio8.clickOn = !Audio8.clickOn;
 });
@@ -2605,6 +2554,9 @@ function retry(){
 /* The retry button on the pause card, in buffer coordinates. Touch has no
    keyboard, so pausing is how a phone gets at it: the card is the menu. */
 const PAUSE_RETRY = { x: VW/2 - 42, y: VH/2 + 44, w: 84, h: 24 };
+/* A phone has no S key, so the sound toggle has to be a box you can hit.
+   It sits under RETRY on the same card. */
+const PAUSE_SFX   = { x: VW/2 - 42, y: VH/2 + 74, w: 84, h: 22 };
 
 function advance(){
   if (state.mode === "play") return;
@@ -2626,8 +2578,11 @@ function pointer(e, down){
     const r = out.getBoundingClientRect();
     const bx = (t.clientX - r.left) / r.width  * VW;
     const by = (t.clientY - r.top)  / r.height * VH;
-    if (bx >= PAUSE_RETRY.x && bx <= PAUSE_RETRY.x + PAUSE_RETRY.w &&
-        by >= PAUSE_RETRY.y && by <= PAUSE_RETRY.y + PAUSE_RETRY.h){ retry(); return; }
+    const inBox = b => bx >= b.x && bx <= b.x + b.w && by >= b.y && by <= b.y + b.h;
+    if (inBox(PAUSE_RETRY)){ retry(); return; }
+    /* Toggling sound must not also unpause, or you would never see what you
+       just did to it. */
+    if (inBox(PAUSE_SFX)){ Sfx.mute(!Sfx.muted); return; }
   }
   togglePause();
 }
