@@ -277,9 +277,13 @@
     pendingScore = score; busy = false;
     modal.querySelector('.lb-ct').textContent = heading || 'Game Over';
     modal.querySelector('.lb-scoreval').textContent = String(score);
-    modal.querySelector('.lb-cp').textContent = cfg.prize
-      ? (cfg.prizeText || 'Highest score when the clock runs out wins. Add your email to claim a prize if you win.')
-      : 'Post your initials to the board. Email only needed to join the list.';
+    /* Three states of copy, matching the three the board itself shows. Once
+       the prize is settled the form is still worth filling in, but promising
+       a prize for it would be a lie. */
+    modal.querySelector('.lb-cp').textContent =
+      !cfg.prize ? 'Post your initials to the board. Email only needed to join the list.'
+      : state.closed ? 'The competition has closed and the winner is settled, but the board is still live. Post your score.'
+      : (cfg.prizeText || 'Highest score when the clock runs out wins. Add your email to claim a prize if you win.');
     modal.querySelectorAll('.lb-inis input').forEach(function (i) { i.value = ''; });
     modal.querySelector('.lb-email').value = '';
     modal.querySelector('.lb-join').checked = false;
@@ -357,8 +361,15 @@
     onGameOver: function (score, opts) {
       var heading = opts && opts.heading;
       load().then(function () {
-        if (!state.closed && score > 0) showModal(score, heading);
-        else showBoard();          // scored zero, or the prize has closed
+        /* A closed prize does NOT close the board. This used to read
+           `!state.closed && score > 0`, so the moment a competition ended
+           every player was dropped straight onto the board with no way to
+           put their initials on it, and the game read as locked. The server
+           has never refused a post after the close; only this line did.
+           The winner is settled server-side inside the prize window, so a
+           later score cannot take it. */
+        if (score > 0) showModal(score, heading);
+        else showBoard();                      // nothing to enter
       });
     },
     hideScreen: hideScreen,
