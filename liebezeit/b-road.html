@@ -48,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.12.1 · 17 Aug";
+const VERSION      = "v1.13.0 · 17 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -59,7 +59,7 @@ const ROAD_W       = 2000;
 const RUMBLE_LEN   = 5;          // band length: 3 strobed at about 7Hz, 5 is about 4Hz
 const FINISH_BAR   = 93;         // the line lands on this downbeat
 const FINISH_T     = (FINISH_BAR-1) * BAR;
-const FINISH_STOP  = SEGLEN*13;  // where the camera parks, short of the line
+const FINISH_ROWS  = 9;          // how many segments deep the chequered band is
 const DASH_LEN     = 6;          // lane paint: on for this many, off for this many
 /* How much darker the dark band is than the light one, per surface. The
    palettes carry a second colour for each, but the two are only about four
@@ -693,13 +693,13 @@ const state = {
   section:SECTIONS[0], prevSection:SECTIONS[0], blend:1,
   bar:1, musicT:0,
   position:0, playerX:0, speed:0, throttle:1,
-  lean:0, finishAt:0, steerNow:0, timeAdd:0, timeAddV:0, ridge:null, vanishY:0, vanishX:0,
+  lean:0, finishAt:0, steerNow:0, timeAdd:0, timeAddV:0, ridge:null,
   segments:[], genCurve:0, genY:0, genBar:0,
   barStart:[], roadBarCursor:1,
   scenery:[], traffic:[], meteors:[], fxQueue:[],
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
-  banner:0, bannerSec:null, cue:"", cueT:0, outroT:0,
+  banner:0, bannerSec:null, cue:"", cueT:0,
   paused:false, wet:0, smoke:[], smokeT:0, sfxMsg:0, startSrc:null, skidT:0, lastSteer:0,
   chainSrc:null, setNote:0,
   light:0.5, eclipse:0, moonX:-3.4, night:false,
@@ -860,43 +860,6 @@ function update(dt){
   Audio8.tick(dt);
   Audio8.pump();
 
-  if (state.mode === "outro"){
-    /* The camera stops at the line. You keep going, small and smaller,
-       until the road takes you. */
-    state.outroT += dt;
-    // the camera is fixed at the line: the road stops, the car does not
-    state.speed *= (1 - 0.55*dt);
-    /* Straighten onto the middle of the road. You are not driving any more, and
-       finishing hard against the left kerb put the banner half out of frame.
-       Nothing is taken from the player: the line is already behind them. */
-    state.playerX += (0 - state.playerX) * Math.min(1, 3.4*dt);
-    state.shake = Math.max(0, state.shake - dt*4);
-    if (state.pop){ state.pop.t -= dt; if (state.pop.t<=0) state.pop=null; }
-
-    /* Traffic carries on through the line and the last of the dust settles.
-       Both used to freeze where they were, leaving cars parked across the road
-       and a puff of dust hanging in the air for the whole outro. */
-    for (let i=state.traffic.length-1; i>=0; i--){
-      const c = state.traffic[i];
-      c.z += c.speed * dt * 1.6;
-      if (c.z > state.position + DRAW_DIST*SEGLEN) state.traffic.splice(i,1);
-    }
-    for (let i=state.smoke.length-1; i>=0; i--){
-      const sp = state.smoke[i]; sp.t += dt;
-      if (sp.t >= sp.life){ state.smoke.splice(i,1); continue; }
-      sp.x += sp.vx*dt; sp.y += sp.vy*dt; sp.r += (sp.grow || 8.5)*dt;
-    }
-    // the engine goes with the car: away, then gone
-    const away = clamp(state.outroT/4.6, 0, 1);
-    Sfx.hold("engine", away < 1, 0.07*(1-away), 0.58 + 0.72*clamp(state.speed/BASE_SPEED,0,1.4));
-    Sfx.hold("kerb", false, 0); Sfx.hold("verge", false, 0);
-    if (state.outroT > (TOTAL_BARS - FINISH_BAR + 1) * BAR - 0.6){
-      state.mode = "finish";
-      if (typeof LEADERBOARD_ENABLED !== "undefined" && LEADERBOARD_ENABLED && window.Leaderboard)
-        Leaderboard.onGameOver(Math.floor(state.score));
-    }
-    return;
-  }
   if (state.mode !== "play"){
     state.banner = Math.max(0, state.banner - dt);
     Sfx.hold("engine", false, 0); Sfx.hold("kerb", false, 0); Sfx.hold("verge", false, 0);
@@ -909,14 +872,19 @@ function update(dt){
   const bar  = Math.floor(barF) + 1;
 
   if (bar > TOTAL_BARS){ finish(); return; }
-  /* The camera parks on the downbeat of FINISH_BAR, and finishAt is re-solved
-     every frame from the CURRENT speed, the same way scenery is placed, so it
-     lands on the beat whatever the player does with the throttle. That leaves
-     the last four bars of the track playing over a still frame. */
-  if (state.musicT > FINISH_T - 9 && state.mode === "play"){
-    const left = FINISH_T - state.musicT;
-    state.finishAt = state.position + state.speed*left + FINISH_STOP;
-    if (left <= 0){ finish(); return; }
+  /* The chequered band is placed by arrival time, the same way the scenery
+     is: its position is re-solved every frame from the CURRENT speed so it
+     reaches the car on the downbeat of FINISH_BAR whatever the player does
+     with the throttle. When it gets there, the run is over.
+
+     There used to be a gantry with a banner on it, and an outro where the
+     camera parked at the line while the car drove away into the distance.
+     Every version of that looked like the car being sucked into the sign.
+     A band of squares on the tarmac and a hard cut to the end screen is the
+     honest version and it cannot go wrong. */
+  if (state.musicT > FINISH_T - 9){
+    state.finishAt = state.position + PLAYER_Z + state.speed*(FINISH_T - state.musicT);
+    if (state.musicT >= FINISH_T){ finish(); return; }
   }
 
 
@@ -1195,10 +1163,18 @@ function crash(mag){
 }
 function gameOver(){ state.mode = "over"; Audio8.stop();
   Sfx.silence(); Sfx.play("timeout", 0.8); }
+/* Crossing the band ends the run exactly the way the clock running out does:
+   straight to the end screen and the initials box. The one difference is
+   deliberate: the music is NOT stopped, so the last four bars of the track
+   play out underneath. */
 function finish(){
-  state.mode = "outro"; state.outroT = 0;
-  Sfx.play("finish", 0.75);
+  state.mode = "finish";
   state.bestChain = Math.max(state.bestChain, state.chain);
+  Sfx.silence();                       // engine, kerb and grass stop with the run
+  Sfx.play("finish", 0.75);
+  document.body.classList.remove("playing");
+  if (typeof LEADERBOARD_ENABLED !== "undefined" && LEADERBOARD_ENABLED && window.Leaderboard)
+    Leaderboard.onGameOver(Math.floor(state.score));
 }
 
 function startRun(){
@@ -1206,7 +1182,7 @@ function startRun(){
   state.section = SECTIONS[0]; state.prevSection = SECTIONS[0]; state.blend = 1;
   state.bar=1; state.musicT=0; state.position=0; state.playerX=0;
   state.speed=BASE_SPEED*0.4; state.throttle=0.94;
-  state.lean=0; state.finishAt=0; state.outroT=0; state.timeAdd=0; state.city=0;
+  state.lean=0; state.finishAt=0; state.timeAdd=0; state.city=0;
   state.segments.length=0; state.genCurve=0; state.genY=0; state.genBar=0;
   state.barStart.length=0; state.roadBarCursor=1;
   state.scenery.length=0; state.traffic.length=0; state.meteors.length=0;
@@ -1520,53 +1496,34 @@ function drawCar(c, x, y, sc, clipY){
 
 /* The finishing line: a chequered strip across the road, a banner over it
    on two posts, and Kalinka standing at the verge waiting for you. */
-function drawFinishLine(segs, baseIdx, horizon){
-  const n = Math.floor(state.finishAt/SEGLEN) - baseIdx;
-  if (n < 1 || n >= DRAW_DIST) return;
-  const seg = segs[baseIdx + n]; if (!seg || !seg.p1.screen.scale) return;
-  const sc = seg.p1.screen.scale, sx = seg.p1.screen.x, sy = seg.p1.screen.y, sw = seg.p1.screen.w;
-  if (sy > VH + 60 || sw < 2) return;
-  const u = q => sc * q * ROAD_W * VW/2;
+/* A chequered band painted across the track, drawn per road segment so it
+   takes the perspective, the camber and the crest exactly the way the lane
+   paint does. The phase flips every row, which is what makes it read as a
+   chequerboard rather than as a set of stripes.
 
-  // chequered strip on the tarmac
-  const cells = 10, cw = (sw*2)/cells, ch = Math.max(2, sw*0.13);
-  for (let i=0;i<cells;i++){
-    ctx.fillStyle = (i%2) ? "#12120f" : "#ffffff";
-    ctx.fillRect(sx - sw + i*cw, sy - ch, cw+1, ch);
-  }
-  // posts and banner
-  const ph = u(0.9), pw = Math.max(1, u(0.05));
-  ctx.fillStyle = "#e8e2d0";
-  ctx.fillRect(sx - sw - pw, sy - ph, pw*2, ph);
-  ctx.fillRect(sx + sw - pw, sy - ph, pw*2, ph);
-  const bh = Math.max(4, u(0.40));
-  ctx.fillStyle = "#f4f0e0";
-  ctx.fillRect(sx - sw - pw, sy - ph, sw*2 + pw*2, bh);
-  ctx.strokeStyle = "#000"; ctx.lineWidth = Math.max(1, u(0.02));
-  ctx.strokeRect(sx - sw - pw, sy - ph, sw*2 + pw*2, bh);
-  if (bh > 11){
-    /* The place is the headline. FINISH was doing the shouting and the name of
-       the circuit was set in mouse type underneath it. */
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = "#20242c";
-    ctx.font = Math.round(bh*0.20)+'px "LagunaPump", "Arial Black", sans-serif';
-    ctx.fillText("WELCOME TO", sx, sy - ph + bh*0.26);
-    /* Fit the name to the board rather than hoping. The sign narrows as the
-       road curves and LAGUNA SECA was running off both ends of it. */
-    ctx.fillStyle = "#c4241a";
-    const room = (sw*2 + pw*2) * 0.88;
-    let fs = Math.round(bh*0.46);
-    ctx.font = fs+'px "LagunaPump", "Arial Black", sans-serif';
-    const wide = ctx.measureText("LAGUNA SECA").width;
-    if (wide > room){
-      fs = Math.max(4, Math.floor(fs * room / wide));
-      ctx.font = fs+'px "LagunaPump", "Arial Black", sans-serif';
+   It runs kerb to kerb, over the rumble strips rather than stopping at the
+   tarmac, because that is what a finish line does and because at a distance
+   the extra width is most of what makes it visible at all. Nine segments deep
+   for the same reason: a single row aliases into a grey smudge before you are
+   anywhere near it. */
+const FINISH_W = 1.24;                       // matches the rumble strip
+function drawFinishLine(segs, baseIdx){
+  const n0 = Math.floor(state.finishAt/SEGLEN) - baseIdx;
+  const CELLS = 10;
+  for (let r = 0; r < FINISH_ROWS; r++){
+    const n = n0 + r;
+    if (n < 1 || n >= DRAW_DIST) continue;
+    const seg = segs[baseIdx + n]; if (!seg) continue;
+    const p1 = seg.p1.screen, p2 = seg.p2.screen;
+    if (!p1.scale || p1.w < 1) continue;
+    for (let i = 0; i < CELLS; i++){
+      const a0 = -FINISH_W + 2*FINISH_W*i/CELLS, a1 = -FINISH_W + 2*FINISH_W*(i+1)/CELLS;
+      const am = (a0+a1)/2, ah = (a1-a0)/2;
+      quad(ctx, p1.x + p1.w*am, p1.y, p1.w*ah + 0.5,
+                p2.x + p2.w*am, p2.y, p2.w*ah + 0.5,
+                ((i + r) % 2) ? "#12120f" : "#f2f0e8");
     }
-    ctx.fillText("LAGUNA SECA", sx, sy - ph + bh*0.64);
   }
-  /* There was a Kalinka here, drawn at 1.5 road-widths out and scaled with
-     the segment, so as the line came at you she inflated into a two-storey
-     animal on the verge. Gone. */
 }
 
 /* Flat sprite, drawn straight on. The body shifts a little under load but
@@ -1586,30 +1543,14 @@ function drawTyreSmoke(){
 function drawPlayerCar(){
   const bob = Math.sin(state.musicT*Math.PI/TICK)*0.5;
   const t   = state.lean*26;
-  // in the outro the camera holds and the car drives away from it
-  const o  = state.mode === "outro" ? clamp(state.outroT/5.0, 0, 1) : 0;
-  /* It shrinks to a bit over a third and fades out under the banner. Taking
-     it down to a three-pixel speck was never going to look like anything but
-     a bug, however correct the perspective was. */
-  const sh = 1 - o*0.62;
-  const fade = 1 - clamp((o - 0.62)/0.34, 0, 1);
-  if (fade <= 0.01) return;
-  /* It recedes to the point the ROAD actually vanishes at, which render()
-     works out each frame from the finish-line segment or the horizon. Aiming
-     at a guessed fraction of the screen is what kept sending it into the sky
-     on a crest or a dip. */
-  const vy = state.vanishY || VH*0.46, vx = state.vanishX || VW/2;
-  const cx = Math.round(lerp(VW/2 + state.lean*16*sh, vx, o*o)
+  /* The car sits where it sits. It used to shrink and fade toward a published
+     vanishing point during an outro, which read as a tractor beam however it
+     was tuned. There is no outro now. */
+  const cx = Math.round(VW/2 + state.lean*16
                         + (state.shake ? rnd(-state.shake,state.shake) : 0));
-  const cy = Math.round(lerp(VH - 24, vy, o*o) + bob*sh);
+  const cy = Math.round(VH - 24 + bob);
   const w = 54, h = 30;
   ctx.save();
-  ctx.globalAlpha = fade;
-  /* One transform for the whole car. It used to shrink w and h while every
-     wheel, lamp cluster and number plate stayed a fixed pixel size, so driving
-     away from the camera at the finish pulled the thing apart into a cloud of
-     blocks that drifted off. Scaling the context scales all of it together. */
-  if (sh !== 1){ ctx.translate(cx, cy); ctx.scale(sh, sh); ctx.translate(-cx, -cy); }
 
   ctx.strokeStyle="#000"; ctx.lineWidth=2;
   ctx.fillStyle="rgba(0,0,0,.45)";
@@ -1815,20 +1756,7 @@ function render(){
     }
   }
 
-  /* Where the car is heading. The finish-line segment if we can see it,
-     otherwise the horizon: either way a real screen position rather than a
-     guess. */
-  state.vanishY = Math.max(4, horizon - 2);
-  state.vanishX = VW/2;
-  if (state.finishAt){
-    const fn = Math.floor(state.finishAt/SEGLEN) - baseIdx;
-    const fs = (fn > 0 && fn < DRAW_DIST) ? segs[baseIdx + fn] : null;
-    if (fs && fs.p1.screen.scale){
-      state.vanishY = Math.max(4, fs.p1.screen.y - 3);
-      state.vanishX = fs.p1.screen.x;
-    }
-    drawFinishLine(segs, baseIdx, horizon);
-  }
+  if (state.finishAt) drawFinishLine(segs, baseIdx);
   if (state.night) drawHeadlights(horizon);
   drawTyreSmoke();
   drawPlayerCar();
@@ -2359,7 +2287,7 @@ function frame(now){
      that did not exist. The loop keeps going and complains once instead. */
   try {
     update(dt);
-    if (state.mode === "play" || state.mode === "outro") render(); else { drawOverlayScreen(); }
+    if (state.mode === "play") render(); else { drawOverlayScreen(); }
     if (state.paused) drawPaused();
     /* The sound toast lives out here rather than in update(), because update()
        returns early while paused and S works whether you are paused or not. */
