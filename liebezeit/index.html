@@ -240,7 +240,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.13.0</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.13.1</div>
       </div>
 
       <div class="bezel">
@@ -275,7 +275,7 @@
       <div class="hull-foot">
         <span class="foot-play">Arrows steer &middot; up down throttle</span>
         <span class="foot-play">Traffic Dodger</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.13.0</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.13.1</span>
       </div>
     </div>
   </div>
@@ -307,7 +307,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.13.0 · 17 Aug";
+const VERSION      = "v1.13.1 · 17 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -1441,7 +1441,7 @@ function finish(){
   Sfx.play("finish", 0.75);
   document.body.classList.remove("playing");
   if (typeof LEADERBOARD_ENABLED !== "undefined" && LEADERBOARD_ENABLED && window.Leaderboard)
-    Leaderboard.onGameOver(Math.floor(state.score));
+    Leaderboard.onGameOver(Math.floor(state.score), { heading: "Finished" });
 }
 
 function startRun(){

@@ -3,6 +3,7 @@
      Leaderboard.init('darkstar', { screen: '.scanner', accent: '#48d86b',
                                     prize: true, onReplay: resetGame });
      Leaderboard.onGameOver(score);   // when a run ends
+     Leaderboard.onGameOver(score, { heading: 'Finished' });   // ...by winning
      Leaderboard.hideScreen();        // call inside the game's own restart
 
    Flow: run ends -> if you scored, an entry form pops (three initials + optional
@@ -266,9 +267,15 @@
 
   var pendingScore = 0, busy = false;
 
-  function showModal(score) {
+  /* `heading` is optional and defaults to Game Over, so the two games that
+     call onGameOver with one argument are untouched. Liebezeit passes
+     "Finished" when the run ended by crossing the line rather than by the
+     clock running out: telling somebody who completed the track that it is
+     game over is just wrong. */
+  function showModal(score, heading) {
     buildModal();
     pendingScore = score; busy = false;
+    modal.querySelector('.lb-ct').textContent = heading || 'Game Over';
     modal.querySelector('.lb-scoreval').textContent = String(score);
     modal.querySelector('.lb-cp').textContent = cfg.prize
       ? (cfg.prizeText || 'Highest score when the clock runs out wins. Add your email to claim a prize if you win.')
@@ -347,9 +354,10 @@
       fetchToken();
     },
     onGameStart: function () { fetchToken(); },
-    onGameOver: function (score) {
+    onGameOver: function (score, opts) {
+      var heading = opts && opts.heading;
       load().then(function () {
-        if (!state.closed && score > 0) showModal(score);
+        if (!state.closed && score > 0) showModal(score, heading);
         else showBoard();          // scored zero, or the prize has closed
       });
     },
