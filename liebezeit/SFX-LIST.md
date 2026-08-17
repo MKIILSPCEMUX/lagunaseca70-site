@@ -30,6 +30,15 @@ one in use. The manifest maps the code names onto them, so `chain1` loads
 `chain1a.mp3` and the game code never mentions the letter. The nine originals
 (`chain1`–`chain8`, `chain_top`) and `chain_break` are unused and can go.
 
+## Turning it off
+
+**S** mutes the effects and leaves the music playing. Every effect goes through
+one gain node, so muting is a single ramp rather than chasing down each loop,
+and the loops keep running silently so nothing has to be rebuilt when it comes
+back. The state is announced on screen and again on the pause card. S used to be
+the brake in the undocumented WASD scheme; it cannot be both, so the brake is
+the down arrow and the pad, as advertised.
+
 ## Two things the code measures instead of being told
 
 **Leading silence.** Every decoded buffer is scanned for its first audible

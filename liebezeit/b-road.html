@@ -48,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.10.0 · 17 Aug";
+const VERSION      = "v1.11.0 · 17 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -549,7 +549,17 @@ const Sfx = {
   bytes:{}, buf:{}, head:{}, loops:{}, bus:null, ctx:null,
   /* Mike measured the drop in pass.wav at 0.90s. The automatic reading lands
      a shade before that, so it is nudged onto his figure. */
-  passLead:0.85, passTrim:0.06, live:0,
+  passLead:0.85, passTrim:0.06, live:0, muted:false,
+
+  /* S kills the effects and leaves the music alone, which is what Mike asked
+     for and is also the useful half: the track is the point of the game. One
+     gain node carries every effect, so muting is one ramp rather than chasing
+     down each loop, and the loops keep running silently so nothing has to be
+     rebuilt when it comes back. */
+  mute(on){
+    this.muted = on;
+    if (this.ctx && this.bus) this.bus.gain.setTargetAtTime(on ? 0 : 1, this.ctx.currentTime, 0.03);
+  },
 
   /* Bytes first, with no audio context in sight: this can run the moment the
      page loads, long before the browser will let us make any noise. */
@@ -564,7 +574,9 @@ const Sfx = {
   attach(ctx){
     if (this.ctx) return;
     this.ctx = ctx;
-    this.bus = ctx.createGain(); this.bus.gain.value = 1; this.bus.connect(ctx.destination);
+    this.bus = ctx.createGain();
+    this.bus.gain.value = this.muted ? 0 : 1;      // muted before the first gesture stays muted
+    this.bus.connect(ctx.destination);
     for (const k in this.bytes) this.decode(k);
   },
 
@@ -675,7 +687,7 @@ const state = {
   lastTick:-1, nextTick:0,
   timeLeft:20, score:0, crashT:0, shake:0,
   banner:0, bannerSec:null, cue:"", cueT:0, outroT:0,
-  paused:false, wet:0, smoke:[], smokeT:0, startSrc:null, skidT:0, lastSteer:0,
+  paused:false, wet:0, smoke:[], smokeT:0, sfxMsg:0, startSrc:null, skidT:0, lastSteer:0,
   chainSrc:null, setNote:0,
   light:0.5, eclipse:0, moonX:-3.4, night:false,
   bolt:null, boltT:0, boltIx:0, nextBolt:0, flashT:0, rain:0, chill:1, cloud:0, traffic_mul:1, city:0, dust:0, rainbow:0, rainDrops:[],
@@ -859,6 +871,7 @@ function update(dt){
     for (let i=state.smoke.length-1; i>=0; i--){
       const sp = state.smoke[i]; sp.t += dt;
       if (sp.t >= sp.life){ state.smoke.splice(i,1); continue; }
+      if (sp.ay) sp.vy += sp.ay*dt;
       sp.x += sp.vx*dt; sp.y += sp.vy*dt; sp.r += (sp.grow || 8.5)*dt;
     }
     // the engine goes with the car: away, then gone
@@ -988,34 +1001,53 @@ function update(dt){
      turned and there is speed to scrub. They drift outward and down the
      screen, which is the world moving past, and swell as they thin out. */
   state.smokeT -= dt;
-  /* Two kinds of puff off the same wheels. On tarmac it is a wisp of rubber
-     smoke when you turn in. On the grass it is dust, and it does not need you
-     to be steering: the wheels are throwing it up the whole time you are out
-     there. Bigger, browner, and far more of it. */
-  const dusting = offRoad && speedPct > 0.18;
-  if ((dusting || (steer !== 0 && speedPct > 0.45)) && state.smokeT <= 0){
-    state.smokeT = dusting ? 0.022 : 0.038;
-    /* Dust throws two puffs per wheel and throws them OUTWARD hard, because
-       anything spawned tight behind the car is drawn under it and never seen.
-       Smoke stays as one wisp per wheel. */
-    for (const w of [-1, 1]) for (let n = 0; n < (dusting ? 2 : 1); n++){
-      const loaded = dusting ? 1 : ((w === -Math.sign(steer)) ? 1 : 0.62);
-      state.smoke.push({
-        x: VW/2 + w*(dusting ? 30 : 27) + rnd(-3,3),
-        y: VH - (dusting ? 16 : 21) + rnd(-2,2),
-        vx: dusting ? w*rnd(34, 62) : w*14 - steer*26 + rnd(-8,8),
-        vy: dusting ? rnd(-14, 4) : rnd(1, 9),
-        r: (dusting ? rnd(3.0, 5.6) : rnd(2.0, 3.4)) * loaded,
-        grow: dusting ? 17 : 8.5,
-        dust: dusting ? 1 : 0,
-        t: 0, life: (dusting ? rnd(0.55, 1.05) : rnd(0.34, 0.58)) * loaded
-      });
+  /* Three kinds of puff off the same rear wheels, and never more than one
+     kind at a time. On dry tarmac it is a wisp of rubber smoke, and only when
+     you turn in hard enough to scrub. On the grass it is dust, which does not
+     wait for you to steer: the wheels throw it up the whole time you are out
+     there. In standing water it is spray, which likewise never stops. Water
+     leaves the tyre faster than dirt does and is gone sooner, so the spray is
+     smaller, quicker, thrown up rather than out, and short-lived. */
+  const KIND = { SMOKE:0, DUST:1, SPRAY:2 };
+  const kind = (offRoad && speedPct > 0.18)                        ? KIND.DUST
+             : (!offRoad && state.wet > 0.30 && speedPct > 0.22)   ? KIND.SPRAY
+             : (steer !== 0 && speedPct > 0.45)                    ? KIND.SMOKE
+             : -1;
+  if (kind >= 0 && state.smokeT <= 0){
+    state.smokeT = [0.038, 0.022, 0.034][kind];
+    for (const w of [-1, 1]) for (let n = 0, per = kind === KIND.SMOKE ? 1 : 2; n < per; n++){
+      const p = { t:0, kind };
+      if (kind === KIND.DUST){
+        /* Thrown OUTWARD hard, because anything spawned tight behind the car
+           is drawn under it and never seen. */
+        p.x = VW/2 + w*30 + rnd(-3,3);      p.y  = VH - 16 + rnd(-2,2);
+        p.vx = w*rnd(34, 62);               p.vy = rnd(-14, 4);
+        p.r  = rnd(3.0, 5.6);               p.grow = 17;
+        p.life = rnd(0.55, 1.05);
+      } else if (kind === KIND.SPRAY){
+        /* A rooster tail: up and out off the tyre, then falling back. ay is
+           what makes it arc instead of drifting, and the arc is the whole
+           reason it reads as water rather than as more dust. */
+        p.x = VW/2 + w*29 + rnd(-3,3);      p.y  = VH - 22 + rnd(-2,2);
+        p.vx = w*rnd(26, 58) - steer*18;    p.vy = rnd(-58, -26);
+        p.r  = rnd(2.2, 4.0);               p.grow = 13;   p.ay = 90;
+        p.life = rnd(0.34, 0.62);
+      } else {
+        /* rubber only really comes off the outside wheel */
+        const loaded = (w === -Math.sign(steer)) ? 1 : 0.62;
+        p.x = VW/2 + w*27 + rnd(-3,3);      p.y  = VH - 21 + rnd(-2,2);
+        p.vx = w*14 - steer*26 + rnd(-8,8); p.vy = rnd(1, 9);
+        p.r  = rnd(2.0, 3.4) * loaded;      p.grow = 8.5;
+        p.life = rnd(0.34, 0.58) * loaded;
+      }
+      state.smoke.push(p);
     }
   }
   for (let i=state.smoke.length-1; i>=0; i--){
     const s = state.smoke[i];
     s.t += dt;
     if (s.t >= s.life){ state.smoke.splice(i,1); continue; }
+    if (s.ay) s.vy += s.ay*dt;
     s.x += s.vx*dt; s.y += s.vy*dt; s.r += (s.grow || 8.5)*dt;
   }
 
@@ -1547,10 +1579,13 @@ function drawTyreSmoke(){
   for (const s of state.smoke){
     const k = 1 - s.t/s.life;
     const r = Math.max(1, Math.round(s.r));
-    // dust takes its colour from the ground it is being thrown off
-    ctx.fillStyle = s.dust
-      ? rgba(mixHex(pal("ground",0), "#e6c489", 0.74), (0.66*k*k).toFixed(3))
-      : "rgba(232,228,218,"+(0.50*k*k).toFixed(3)+")";
+    /* Dust takes its colour from the ground it is being thrown off. Spray is
+       a dull blue with a little of the tarmac mixed back in, so it reads as
+       water lifted off a wet road rather than as a light on its own. */
+    ctx.fillStyle =
+      s.kind === 1 ? rgba(mixHex(pal("ground",0), "#e6c489", 0.74), (0.66*k*k).toFixed(3)) :
+      s.kind === 2 ? rgba(mixHex("#7d9cbe", pal("road",0), 0.22),   (0.66*k).toFixed(3)) :
+                     "rgba(232,228,218,"+(0.50*k*k).toFixed(3)+")";
     ctx.fillRect(Math.round(s.x)-r, Math.round(s.y)-r, r*2, r*2);
   }
 }
@@ -2166,6 +2201,13 @@ function drawPaused(){
   TXT_FACE = FACE_DISPLAY;
   txt("PAUSED", VW/2, VH/2 - 32, "#ffe066", 23, "center");
   txt("TAP ANYWHERE TO CARRY ON", VW/2, VH/2 + 4, "#f4f0e4", 8, "center");
+  /* The three keyboard extras have nowhere else to be announced. Mono, not
+     the display face: LagunaPump is wide and this line ran off both edges.
+     The last word is the state the sound is in, not what the key does. */
+  TXT_FACE = FACE_MONO;
+  txt("R RETRY \u00b7 C SCREEN \u00b7 S SOUND " + (Sfx.muted ? "OFF" : "ON"),
+      VW/2, VH/2 + 22, "#b7ae9c", 7, "center");
+  TXT_FACE = FACE_DISPLAY;
   const b = PAUSE_RETRY;
   ctx.fillStyle = "#c4241a"; ctx.fillRect(b.x, b.y, b.w, b.h);
   ctx.strokeStyle = "#f4f0e4"; ctx.lineWidth = 2;
@@ -2255,13 +2297,17 @@ const keymap = {
   ArrowLeft:"left", a:"left", A:"left",
   ArrowRight:"right", d:"right", D:"right",
   ArrowUp:"up", w:"up", W:"up",
-  ArrowDown:"down", s:"down", S:"down"
+  ArrowDown:"down"
 };
+/* S used to be the brake in the undocumented WASD scheme. It is the sound
+   toggle now, and it cannot be both: braking would have cut the effects. The
+   arrows and the four pads are what the cabinet actually advertises. */
 addEventListener("keydown", e=>{
   if (keymap[e.key]){ input[keymap[e.key]] = true; e.preventDefault(); }
   if (e.key === " "){ e.preventDefault(); if (!togglePause()) advance(); }
   if (e.key === "r" || e.key === "R"){ e.preventDefault(); retry(); }
   if (e.key === "c" || e.key === "C") state.crt = !state.crt;
+  if (e.key === "s" || e.key === "S"){ Sfx.mute(!Sfx.muted); state.sfxMsg = 1.4; }
   if (e.key === "m" || e.key === "M") Audio8.clickOn = !Audio8.clickOn;
 });
 addEventListener("keyup", e=>{ if (keymap[e.key]){ input[keymap[e.key]] = false; e.preventDefault(); } });
@@ -2371,6 +2417,19 @@ function frame(now){
     update(dt);
     if (state.mode === "play" || state.mode === "outro") render(); else { drawOverlayScreen(); }
     if (state.paused) drawPaused();
+    /* The sound toast lives out here rather than in update(), because update()
+       returns early while paused and S works whether you are paused or not. */
+    if (state.sfxMsg > 0){
+      state.sfxMsg -= dt;
+      TXT_FACE = FACE_DISPLAY;
+      ctx.globalAlpha = clamp(state.sfxMsg/0.4, 0, 1);
+      /* Up in the sky with TIME ADDED rather than down by the car, where it
+         sat on the roof and you could not read either. */
+      txt(Sfx.muted ? "SOUND FX OFF" : "SOUND FX ON", VW/2, 96,
+          Sfx.muted ? "#ffc46a" : "#7cff9a", 11, "center");
+      ctx.globalAlpha = 1;
+      TXT_FACE = FACE_MONO;
+    }
     present();
   } catch (err) {
     if (!state.errLogged){ state.errLogged = true; console.error("[liebezeit] frame error", err); }
