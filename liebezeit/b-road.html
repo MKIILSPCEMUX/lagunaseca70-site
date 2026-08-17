@@ -48,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.14.0 · 17 Aug";
+const VERSION      = "v1.14.2 · 17 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -261,12 +261,14 @@ function makeBolt(){
 /* The breakdown thins the road out but should never empty it, and the road
    has to be full again by the time the drums land on 69. Refilling starts at
    65 and is done by 68, which gives the cars a bar to actually arrive in. */
-/* The first eight bars are nearly empty on purpose. The chain sounds are a
-   melodic ladder and they need the track underneath them before they start
-   climbing, so there is one car on the road until bar 8 and the traffic fills
-   in over the five bars after that. The clock is not affected: time comes from
-   the section checkpoints, not from overtakes. */
-const W_TRAFFIC = [[1,0.10],[8,0.16],[13,1.0],[50,1.0],[56,0.60],[61,0.38],[65,0.38],[68,1.20],[74,1.15],[96,1.0]];
+/* The first four bars are empty, then the road fills over the next five and is
+   at full density by bar 9. The chain sounds are a melodic ladder and they need
+   the track underneath them before they start climbing, but a single car
+   trickling along for eight bars was too little for too long: an empty road
+   that then arrives is a better opening than a thin one that never quite does.
+   The clock is not affected either way; time comes from the section
+   checkpoints, not from overtakes. */
+const W_TRAFFIC = [[1,0],[4,0],[9,1.0],[50,1.0],[56,0.60],[61,0.38],[65,0.38],[68,1.20],[74,1.15],[96,1.0]];
 const W_CHILL   = [[1,0.55],[5,0.38],[9,0.12],[13,0.0],[96,0.0]];
 const W_DUST    = [[1,0.0],[15,0.0],[18,1.0],[24,1.0],[28,0.0],[96,0.0]];
 const W_CLOUD   = [[1,0.0],[23,0.0],[27,1.0],[33,1.0],[40,0.35],[47,0.0],[96,0.0]];
@@ -553,17 +555,16 @@ const SFX_DIR   = "audio/fx/";
 /* The ladder Mike settled on. It sits around 1-2kHz already, so no octave
    shift, and the top note carries its own level because it was sitting right
    where the rungs needed lifting. */
-const CHAIN_GAIN = 0.30, CHAIN_TOP_GAIN = 0.24;
+const CHAIN_GAIN = 0.30;
 const CHAIN_HOLD   = 4.6;
 const SFX_FILES = {
   engine:"engine.wav", kerb:"kerb.wav", verge:"verge.wav",
   /* Back to the first ladder, the synthesised one. Mike's recorded set is
      still in audio/fx/ under the same names with an "a" on the end; swapping
      between them is this block and nothing else, because the game only ever
-     refers to chain1..chain8 and chain_top. */
+     refers to chain1..chain8. */
   chain1:"chain1.mp3", chain2:"chain2.mp3", chain3:"chain3.mp3", chain4:"chain4.mp3",
   chain5:"chain5.mp3", chain6:"chain6.mp3", chain7:"chain7.mp3", chain8:"chain8.mp3",
-  chain_top:"chain_top.mp3",
   pass:"pass.mp3", hit:"hit.mp3", timeout:"timeout.mp3", skid:"skid.mp3",
   finish:"finish.mp3", start:"start.mp3"
 };
@@ -840,9 +841,16 @@ const CAR_HALF_W  = 0.155;          // matches the drawn sprite
 const CAR_HALF_Z  = SEGLEN * 0.9;
 
 function spawnTraffic(dt){
-  const want = Math.max(1, Math.round((state.night ? 5 : 7) * (state.traffic_mul || 1)));
+  /* No floor of one any more: at the very start the multiplier is zero and the
+     road is meant to be genuinely empty, not almost empty. */
+  const mul = state.traffic_mul || 0;
+  const want = Math.round((state.night ? 5 : 7) * mul);
   if (state.traffic.length >= want) return;
-  if (Math.random() > dt * 2.6 * (state.traffic_mul || 1)) return;
+  /* How MANY cars is `want`; how QUICKLY they arrive is this. Scaling the rate
+     by the same multiplier punished the opening twice over, so the road took
+     several bars to reach a density it had already been told to have. Once a
+     car is wanted it turns up promptly. */
+  if (Math.random() > dt * 3.2 * Math.max(mul, 0.55)) return;
 
   const z = state.position + PLAYER_Z + rnd(DRAW_DIST*0.55, DRAW_DIST*0.95)*SEGLEN;
   // which lanes are already taken anywhere near this stretch of road?
@@ -1158,10 +1166,11 @@ function addLink(base){
     /* One note at a time. These ring for 1.4s and a quick chain would
        otherwise stack five of them into a chord. */
     Sfx.release(state.chainSrc, 0.16); state.chainSrc = null;
-    // chain1..8 climb the ladder; past the octave it holds on chain_top
-    state.chainSrc = (state.chain > CHAIN_CAP+1)
-      ? Sfx.play("chain_top", CHAIN_TOP_GAIN)
-      : Sfx.play("chain" + (step+1), CHAIN_GAIN);
+    /* chain1..8 climb the ladder and then it sits on chain8. There was a
+       ninth file, chain_top, for everything past the octave; it is not loaded
+       any more. `step` is already clamped to CHAIN_CAP, so holding the top
+       note is what falls out of the clamp with no special case at all. */
+    state.chainSrc = Sfx.play("chain" + (step+1), CHAIN_GAIN);
   } else Audio8.note(step, state.chain > CHAIN_CAP+1);
   const gain = Math.round(base * Math.min(state.chain, 30));
   state.score += gain;

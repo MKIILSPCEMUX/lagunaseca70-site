@@ -11,8 +11,7 @@ and are gitignored; the browser loads the compressed set in
 | `start` | the ignition, on the title screen, on the first gesture. Starting a run fades it out under the music |
 | `engine` | continuous. Playback rate and level follow the speedo |
 | `pass` | **before** each overtake, so its drop lands as you go past. See below |
-| `chain1`–`chain8` | each link of the chain, climbing the ladder |
-| `chain_top` | past the octave, where the ladder holds |
+| `chain1`–`chain8` | each link of the chain, climbing the ladder, then holding on `chain8` |
 | `hit` | contact, scaled by how hard |
 | `kerb` | continuous, while a wheel is on the rumble strip (0.90 to 1.05 road-widths out) |
 | `verge` | continuous, once you are off on the grass (past 1.05) |
@@ -27,8 +26,11 @@ it added nothing you could hear over the hit itself.
 
 Mike recorded the chain twice. The second set, the files ending in `a`, is the
 one in use. The manifest maps the code names onto them, so `chain1` loads
-`chain1a.mp3` and the game code never mentions the letter. The nine originals
-(`chain1`–`chain8`, `chain_top`) and `chain_break` are unused and can go.
+`chain1a.mp3` and the game code never mentions the letter. There is no longer a ninth note for
+everything past the octave: `chain_top` is not loaded, and a long chain sits on
+`chain8`. In a measured run of a competent driver the ladder climbs once and
+then holds, so `chain8` accounts for roughly half of every chain sound you hear.
+`chain_topa.mp3`, `chain_top.mp3` and `chain_break.mp3` are all unused.
 
 ## Turning it off
 
