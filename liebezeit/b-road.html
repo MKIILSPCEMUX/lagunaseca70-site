@@ -48,7 +48,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.14.2 · 17 Aug";
+const VERSION      = "v1.14.3 · 17 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -261,14 +261,13 @@ function makeBolt(){
 /* The breakdown thins the road out but should never empty it, and the road
    has to be full again by the time the drums land on 69. Refilling starts at
    65 and is done by 68, which gives the cars a bar to actually arrive in. */
-/* The first four bars are empty, then the road fills over the next five and is
-   at full density by bar 9. The chain sounds are a melodic ladder and they need
-   the track underneath them before they start climbing, but a single car
-   trickling along for eight bars was too little for too long: an empty road
-   that then arrives is a better opening than a thin one that never quite does.
-   The clock is not affected either way; time comes from the section
-   checkpoints, not from overtakes. */
-const W_TRAFFIC = [[1,0],[4,0],[9,1.0],[50,1.0],[56,0.60],[61,0.38],[65,0.38],[68,1.20],[74,1.15],[96,1.0]];
+/* Two bars of empty road, then it fills fast and is at full density by bar 6.
+   This has been walked in twice: eight bars of one car was far too thin, four
+   bars of nothing followed by a five-bar ramp was still too slow to arrive.
+   Two bars is enough for the track to state itself before the chain sounds
+   start climbing, and after that the road should feel busy. The clock is not
+   affected either way; time comes from the section checkpoints, not overtakes. */
+const W_TRAFFIC = [[1,0],[2,0],[6,1.0],[50,1.0],[56,0.60],[61,0.38],[65,0.38],[68,1.20],[74,1.15],[96,1.0]];
 const W_CHILL   = [[1,0.55],[5,0.38],[9,0.12],[13,0.0],[96,0.0]];
 const W_DUST    = [[1,0.0],[15,0.0],[18,1.0],[24,1.0],[28,0.0],[96,0.0]];
 const W_CLOUD   = [[1,0.0],[23,0.0],[27,1.0],[33,1.0],[40,0.35],[47,0.0],[96,0.0]];
