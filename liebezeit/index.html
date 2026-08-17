@@ -240,7 +240,7 @@
 
       <div class="hull-head">
         <div class="wordmark">Liebezeit</div>
-        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.13.1</div>
+        <div class="hull-caption">A mini game by Laguna Seca &middot; v1.14.0</div>
       </div>
 
       <div class="bezel">
@@ -275,7 +275,7 @@
       <div class="hull-foot">
         <span class="foot-play">Arrows steer &middot; up down throttle</span>
         <span class="foot-play">Traffic Dodger</span>
-        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.13.1</span>
+        <span class="foot-meta">Laguna Seca &middot; <a href="mailto:contact@lagunaseca70.com">contact</a> &middot; <a href="https://buymeacoffee.com/mikejefford" target="_blank" rel="noopener noreferrer">coffee</a> &middot; v1.14.0</span>
       </div>
     </div>
   </div>
@@ -307,7 +307,7 @@ const SONG_LEN   = TOTAL_BARS * BAR; // 271.06 s = 4:31
 
 /* Measured off the master: kick-band comb locks at 46 ms into the file,
    and the file is 271.073 s against 96 bars at 271.059 s. Nudge by ear. */
-const VERSION      = "v1.13.1 · 17 Aug";
+const VERSION      = "v1.14.0 · 17 Aug";
 const AUDIO_SRC    = "audio/liebezeit.mp3";
 const AUDIO_OFFSET = 0.046;
 
@@ -348,6 +348,10 @@ const THROTTLE_MAX = 1.26;
 /* Clean driving should bank time but not snowball, so the clock is capped
    the way an OutRun checkpoint would cap it. */
 const TIME_CAP     = 50;
+/* Below SLOW_AT of base speed the clock starts running fast, reaching
+   SLOW_COST times real time at a standstill. At or above it, nothing changes. */
+const SLOW_AT      = 0.62;
+const SLOW_COST    = 3.4;
 /* ---- drift ------------------------------------------------------
    The car now has a yaw angle and a lateral velocity, and the gap
    between where it points and where it is going IS the slide.
@@ -543,7 +547,9 @@ const W_WET     = [[1,0.0],[28,0.0],[31,1.0],[37,1.0],[43,0.6],[49,0.0],[96,0.0]
    way it came in. Coverage still drives the darkness; this drives the
    moon, and it only goes one way: in from the left, sits over the sun for
    the dark bars, then out to the right. */
-const MOON_X    = [[1,-3.4],[49,-2.6],[61,0],[68,0],[72,2.6],[96,3.4]];
+/* The moon crosses RIGHT to LEFT: it appears off the sun's right limb, covers
+   it, and leaves to the left. Positive x is right of the sun in radii. */
+const MOON_X    = [[1,3.4],[49,2.6],[61,0],[68,0],[72,-2.6],[96,-3.4]];
 
 /* The three fork strikes, placed on the synth lasers rather than thrown
    at random. Written as bar.beat.sixteenth, all counted from one, so
@@ -810,9 +816,13 @@ const CHAIN_GAIN = 0.30, CHAIN_TOP_GAIN = 0.24;
 const CHAIN_HOLD   = 4.6;
 const SFX_FILES = {
   engine:"engine.wav", kerb:"kerb.wav", verge:"verge.wav",
-  chain1:"chain1a.mp3", chain2:"chain2a.mp3", chain3:"chain3a.mp3", chain4:"chain4a.mp3",
-  chain5:"chain5a.mp3", chain6:"chain6a.mp3", chain7:"chain7a.mp3", chain8:"chain8a.mp3",
-  chain_top:"chain_topa.mp3",
+  /* Back to the first ladder, the synthesised one. Mike's recorded set is
+     still in audio/fx/ under the same names with an "a" on the end; swapping
+     between them is this block and nothing else, because the game only ever
+     refers to chain1..chain8 and chain_top. */
+  chain1:"chain1.mp3", chain2:"chain2.mp3", chain3:"chain3.mp3", chain4:"chain4.mp3",
+  chain5:"chain5.mp3", chain6:"chain6.mp3", chain7:"chain7.mp3", chain8:"chain8.mp3",
+  chain_top:"chain_top.mp3",
   pass:"pass.mp3", hit:"hit.mp3", timeout:"timeout.mp3", skid:"skid.mp3",
   finish:"finish.mp3", start:"start.mp3"
 };
@@ -1381,7 +1391,18 @@ function update(dt){
   state.banner     = Math.max(0, state.banner - dt);
 
   state.score += state.speed * dt * 0.004;
-  state.timeLeft -= dt;
+  /* The clock runs on how fast you are actually going. At speed it ticks in
+     real seconds; crawling, it ticks at up to 2.2x.
+
+     Both the finish line and the section checkpoints sit on the musical clock,
+     so before this the safest possible run was to hold the brake and sit in
+     the dirt: no traffic to hit, no time lost to contact, and the line still
+     arrived on bar 93 because it is placed by arrival time. Going slowly was
+     strictly better than driving, which is the wrong way round for a driving
+     game. Anything at or above 55% of base speed is untouched, so a fast run
+     plays exactly as it did. */
+  const pace = clamp(state.speed / (BASE_SPEED*SLOW_AT), 0, 1);
+  state.timeLeft -= dt * (SLOW_COST - (SLOW_COST-1)*pace);
   if (state.timeLeft <= 0){ state.timeLeft = 0; gameOver(); }
 }
 
@@ -1532,7 +1553,7 @@ function drawSky(horizon){
     ctx.fillStyle="#fff6c8"; ctx.beginPath(); ctx.arc(cx,cy,r-11,0,7); ctx.fill();
     if (e > 0.001){                                    // the bite
       /* Driven by the transit, not by the coverage, so the moon carries on
-         across and leaves to the right instead of reversing out. The rake
+         across and leaves the far side instead of reversing out. The rake
          flattens as it covers, so the crossover into totality is seamless.
          Clipped to the sun, because a new moon is invisible against the sky
          and should not go sailing off as a grey disc once it is clear. */
@@ -2188,13 +2209,14 @@ function weatherPass(horizon){
       ctx.strokeStyle="rgba(255,250,235,"+(0.95*f).toFixed(2)+")"; ctx.lineWidth=2;
       ctx.beginPath(); ctx.arc(cx,cy,23,0,7); ctx.stroke();
       /* Baily's beads: the last light going in, the first light coming
-         out. The moon crosses left to right, so they sit on the right
-         edge before totality and the left edge after it. The old test
-         was against eclipse < 1, which is never false, so they always
-         came out on the same side. */
+         out. The moon crosses right to left, so it eats the sun's right
+         side first and the last light is on the LEFT going in; coming out
+         it clears the right first. The side is read off the transit, not
+         off the coverage, which is symmetric and so always gave the same
+         answer whichever way the moon was travelling. */
       if (f < 0.75){
         const bead = 1-f;
-        const side = state.moonX < 0 ? 0 : Math.PI;
+        const side = state.moonX > 0 ? Math.PI : 0;
         for (let i=0;i<5;i++){
           const a0 = -0.5 + i*0.25 + side;
           ctx.fillStyle="rgba(255,255,240,"+(bead*0.9).toFixed(2)+")";
